@@ -1,4 +1,4 @@
-#ifndef OPS_SIM
+#ifdef OPC_SIM_ENABLED
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -19,10 +19,9 @@ int logging_screenf(char *fmt, ...) {
   return ret;
 }
 
-
 #else
-int loggingf(char *fmt, ...) {
-}
-int logging_screenf(char *fmt, ...){
-}
+
+int loggingf(char *fmt, ...) {}
+int logging_screenf(char *fmt, ...){}
+
 #endif

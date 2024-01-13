@@ -1,8 +1,10 @@
+#ifdef OPC_SIM_ENABLED
+
 #include <opc/io.h>
 #include <opc/logging.h>
-// #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdio.h>
 
 static int LED8x8[8][8]={0};
 static const int LED_MAX_CHARGE = 10000;
@@ -42,14 +44,6 @@ void sim_display_discharge() {
 
 void sim_display() {
     while(1) {
-    // int row_active = MEM_IO[0];
-    // int col_active = MEM_IO[1];
-    // for(int i=0;i<8;i++) if(row_active&(1<<i)) {
-    //     for(int j=0;j<8;j++) if(col_active&(1<<i)) {
-    //         LED8x8[i][j] = 255;
-    //     }
-    // }
-
         logging_screenf("\033[2J\033[H");
         logging_screenf("Screen 8x8\n");
         for(int i=0;i<8;i++) {
@@ -65,13 +59,14 @@ void sim_display() {
     }
 }
 
-void init_sim() {
+__attribute__ ((__constructor__))
+void init_simulator(void) {
     pthread_t thread_id;
     pthread_t thread_id2;
     pthread_t thread_id3;
     pthread_create(&thread_id, NULL, sim_display, NULL);
     pthread_create(&thread_id2, NULL, sim_display_charge, NULL);
     pthread_create(&thread_id3, NULL, sim_display_discharge, NULL);
-//     pthread_join(thread_id, NULL);
-    // pthread_join(thread_id2, NULL);
 }
+
+#endif
