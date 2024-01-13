@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: CI
 
 on:
   push:
@@ -13,5 +13,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: install dependencies
+      run: sudo apt install nasm
     - name: make
       run: make all
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: artifacts
+        path: output/
+

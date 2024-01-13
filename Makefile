@@ -1,16 +1,18 @@
 BUILD = build
+OUTPUT = output
 SIMULATOR_FLAG := -DOPC_SIM_ENABLED
 OPC_CFLAGS = -nostdlib -nodefaultlibs
 
-.PHONY: clean prep all
+.PHONY: clean prep all artifacts
 
-all: prep $(BUILD)/greeting $(BUILD)/sim_greeting $(BUILD)/sample_rom_text.txt
+all: prep $(BUILD)/greeting $(BUILD)/sim_greeting artifacts
 
 clean:
 	rm -f $(BUILD)/*
 
 prep:
 	mkdir -p $(BUILD)/
+	mkdir -p $(OUTPUT)/
 
 # simulator specific rules
 $(BUILD)/sim_o: lib/sim.c
@@ -45,5 +47,12 @@ $(BUILD)/greeting_o: greetings.c
 $(BUILD)/text_to_led: text_to_led.c $(BUILD)/font_o
 	gcc -o $@ $^ -I include/
 
-$(BUILD)/sample_rom_text.txt: $(BUILD)/text_to_led
+# generate artifacts
+
+artifacts: $(OUTPUT)/sample_rom_text.txt $(OUTPUT)/objdump_greetings.txt
+
+$(OUTPUT)/sample_rom_text.txt: $(BUILD)/text_to_led
 	$^ "Happy Diwali!" > $@
+
+$(OUTPUT)/objdump_greetings.txt: $(BUILD)/greeting
+	objdump -D $(BUILD)/greeting > $@
