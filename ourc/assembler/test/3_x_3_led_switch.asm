@@ -10,6 +10,8 @@
 
 section .text
   main:
-    IN R0
-    OUT R0
+    # default write to R0
+    IN [R0], 0
+    # default reads from R0
+    OUT 0, [R0]
     jmp main

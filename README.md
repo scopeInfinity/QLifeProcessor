@@ -7,4 +7,43 @@ The eventual goal(?) is to build a general-purpose processor integrated with sim
 
 ## Design
 
-TBU
+### Specs
+
+* Address Line: 16-bits
+* Max Memory: 64KB
+
+### Constants
+
+* INSZ = 0x20, independent input bytes
+* OUTSZ = 0x20, independent output bytes
+* IPC = 0x0100, intial value of `PC` (or Program Counter).
+
+### Memory Allocation
+
+* `RAM[0:INSZ]` is mapped to I/O module input
+* `RAM[INSZ:OUTSZ]` is mapped to I/O module output
+* `RAM[IPC:IPC+x]` is loaded from ROM. So it essentially contains `.text`, `.data`.
+
+### Sequencing
+
+
+* At boot
+  * Load `ROM[0:x]` into `RAM[IPC:IPC+x]`
+    * TODO: How?
+
+### Assembly
+
+* `.bss` must be the last section.
+* Registers don't really exists. `R[0-7]` are mapped to memory location in `.bss` for convenience and some instructions return response.
+
+### Architecture
+
+#### I/O
+
+Hardware interact asynchronously with IOM (I/O Module) which then interact with RAM at program's will.
+
+* Input devices publish state change in IOM and Output devices read from IOM.
+* Program use `IN <index>` instructions to read from `IOM_in[index]` and write to `RAM[index]`. `IOM_in` won't cache input and it will be read as real-time value. If a input state needs to be cached, it's the input device responsibility.
+* Program use `OUT <index>` instructions to read `RAM[INSZ+index]` and write to `IOM_out[index]`.
+
+
