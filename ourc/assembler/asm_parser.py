@@ -44,9 +44,19 @@ class AsmParser:
     def get_section(self):
         return self.section
 
-    def print(self, resolved=False):
+    def print(self, resolved=False, binary=False):
+        track_binary_address = None
         for add, x in self.final_bytes:
-            print(f"{add:03x}:  {x.get_str(resolved=resolved)}")
+            if not binary:
+                print(f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}")
+            else:
+                if track_binary_address is None:
+                    track_binary_address = add
+                assert track_binary_address == add, "gaps found in binary representation"
+                out = f"{x.get_str(resolved=resolved, binary=True)}"
+                print(out)
+                assert len(out) % 8 == 0
+                track_binary_address += len(out)//8
 
     def section_update(self, name):
         assert name in ["text", "data", "bss"]

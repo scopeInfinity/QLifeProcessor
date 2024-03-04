@@ -8,6 +8,7 @@ def args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("asm")
     parser.add_argument("-r", "--resolved", action="store_true")
+    parser.add_argument("-b", "--binary", action="store_true")
     return parser
 
 def main():
@@ -18,7 +19,7 @@ def main():
             asm.parse_line(line)
     asm.append_boilerplate()
 
-    asm.print(resolved=args.resolved)
+    asm.print(resolved=args.resolved, binary=args.binary)
 
 
 if __name__ == '__main__':
