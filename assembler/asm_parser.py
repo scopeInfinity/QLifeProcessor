@@ -44,19 +44,44 @@ class AsmParser:
     def get_section(self):
         return self.section
 
-    def print(self, resolved=False, binary=False):
+    def print(self, resolved=False, rom_binary=False):
+        '''Prints the instructions.
+
+        Also removes don't care byte(s) at the end coming
+        from .bss section (if rom_binary is true).
+        '''
         track_binary_address = None
+        _content = []
         for add, x in self.final_bytes:
-            if not binary:
-                print(f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}")
+            if not rom_binary:
+                _content.append(f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}")
             else:
                 if track_binary_address is None:
                     track_binary_address = add
                 assert track_binary_address == add, "gaps found in binary representation"
                 out = f"{x.get_str(resolved=resolved, binary=True)}"
-                print(out)
+                _content.append(out)
                 assert len(out) % 8 == 0
                 track_binary_address += len(out)//8
+
+        content = '\n'.join(_content)
+        if rom_binary:
+            _program_content = (content
+                .replace("\n", "")
+                .replace(" ", "")
+                .replace("-", " ")
+                .rstrip()
+                )
+            assert len(_program_content) % 8 == 0
+            _program_size = len(_program_content) // 8 # bytes
+            assert _program_size < 2**8 # as we are using 1 byte for metadata
+            _binary_content = f"{_program_size:08b}" + _program_content
+            assert len(_binary_content) % 8 == 0
+            assert set(_binary_content) <= set(['0', '1']), "only binary context is expected"
+
+            content = '\n'.join([_binary_content[8*i:8*(i+1)] for i in range(len(_binary_content)//8)])
+
+        print(content)
 
     def section_update(self, name):
         assert name in ["text", "data", "bss"]
@@ -98,28 +123,28 @@ class AsmParser:
             self.new_label(label)
 
         elif tokens[0] == "jmp":
-            assert len(tokens) == 2
+            assert len(tokens) == 2, f"found: {tokens}"
             self.add_ins(unit.Instruction("jmp", unit.OperandC(unit.Label(tokens[1]))))
         elif tokens[0] in ["out"]:
-            assert len(tokens) == 3
-            assert util.is_memory_operand(tokens[2])
+            assert len(tokens) == 3, f"found: {tokens}"
+            assert util.is_memory_operand(tokens[2]), f"found: {tokens}"
             # token[1] can be memory or constant
             self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
         elif tokens[0] in ["in"]:
-            assert len(tokens) == 3
-            assert util.is_memory_operand(tokens[1])
+            assert len(tokens) == 3, f"found: {tokens}"
+            assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
             # token[2] can be memory or constant
             self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
         elif tokens[0] in ["mov", "add", "sub", "shl", "shr", "cmp", "and", "or"]:
-            assert len(tokens) == 3
-            assert util.is_memory_operand(tokens[1])
+            assert len(tokens) == 3, f"found: {tokens}"
+            assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
             # token[2] can be memory or constant
             self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
         elif tokens[0] in ["call", "jneq"]:
-            assert len(tokens) == 2
+            assert len(tokens) == 2, f"found: {tokens}"
             self.add_ins(unit.Instruction(tokens[0], unit.OperandC(unit.Label(tokens[1]))))
         elif tokens[0] in ["hlt", "ret"]:
-            assert len(tokens) == 1
+            assert len(tokens) == 1, f"found: {tokens}"
             self.add_ins(unit.Instruction(tokens[0]))
         else:
             raise ValueError(f"don't recognize the unit.instruction: {tokens}")
