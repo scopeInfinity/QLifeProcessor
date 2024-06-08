@@ -43,13 +43,12 @@ module BLOCK_32bit_16aline_test;
         end
 
         selector = 2'b11;  // MCONST
-        address = INPUT16z;
+        address = 16'b0001100100111101;
         is_write = 1'bz;
-        # 10
-        in = 32'b00101000000110010001100100111101;
+        in = INPUT32z;
         # 10
         $display("MBLOCK: MCONST: address=%b is_write=%b in=%b out=%b", address, is_write, in, out);
-        if (out !== 32'b00101000000110010001100100111101) begin
+        if (out !== 32'b00000000000000000001100100111101) begin
             $error("mblock failed");
             $fatal(1);
         end

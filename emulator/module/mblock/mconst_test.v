@@ -8,17 +8,17 @@ module MCONST_test;
         .in(in));
 
     initial begin
-        in = 32'b00011100100011110010111100010010;
+        in = 16'b0010111100010010;
         # 10
         $display("MCONST_TEST: in=%b out=%b", in, out);
-        if (out !== 32'b00011100100011110010111100010010) begin
+        if (out !== 32'b00000000000000000010111100010010) begin
             $error("mconst failed");
             $fatal(1);
         end
-        in = 32'b00111110011011111001011000011000;
+        in = 16'b1001011000011000;
         # 10
         $display("MCONST_TEST: in=%b out=%b", in, out);
-        if (out !== 32'b00111110011011111001011000011000) begin
+        if (out !== 32'b00000000000000001001011000011000) begin
             $error("mconst failed");
             $fatal(1);
         end

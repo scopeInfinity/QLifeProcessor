@@ -1,5 +1,5 @@
 from typing import List, Optional
-import ins
+import assembler.instruction as instruction
 import asm_parser
 import util
 
@@ -74,7 +74,7 @@ class Instruction:
         assert resolved
         do_not_care = "00000000"
         # binary representation
-        out0 = f"{ins.ENCODING[self.ins]:08b}"
+        out0 = f"{instruction.ENCODING[self.ins]:08b}"
         # TODO: needs works, as this represents fake representation
         out1 = do_not_care
         if len(self.operands) > 0:

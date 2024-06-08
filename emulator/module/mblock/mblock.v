@@ -25,7 +25,7 @@ module MBLOCK(output[31:0] out,
     // selector 10 is reserved for IO
 
     MCONST mconst(.out(out3),
-        .in(in));
+        .in(address));
 
     MUX_8_2 m0(.value(out[ 7: 0]), .A(out0[ 7: 0]), .B(out1[ 7: 0]), .D(out3[ 7: 0]), .S(selector[1:0]));
     MUX_8_2 m1(.value(out[15: 8]), .A(out0[15: 8]), .B(out1[15: 8]), .D(out3[15: 8]), .S(selector[1:0]));

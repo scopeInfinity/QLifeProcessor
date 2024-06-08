@@ -4,7 +4,7 @@ from typing import List, Union
 import unit
 import util
 
-DATA_SIZE = 1 # bytes
+from assembler import instruction
 
 BOILERPLATE_INS_APPEND = '''
     section .bss
@@ -124,30 +124,35 @@ class AsmParser:
 
         elif tokens[0] == "jmp":
             assert len(tokens) == 2, f"found: {tokens}"
-            self.add_ins(unit.Instruction("jmp", unit.OperandC(unit.Label(tokens[1]))))
-        elif tokens[0] in ["out"]:
-            assert len(tokens) == 3, f"found: {tokens}"
-            assert util.is_memory_operand(tokens[2]), f"found: {tokens}"
-            # token[1] can be memory or constant
-            self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
+            self.add_ins(instruction.JMP(unit.OperandC(unit.Label(tokens[1]))))
         elif tokens[0] in ["in"]:
             assert len(tokens) == 3, f"found: {tokens}"
             assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
             # token[2] can be memory or constant
             self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
-        elif tokens[0] in ["mov", "add", "sub", "shl", "shr", "cmp", "and", "or"]:
-            assert len(tokens) == 3, f"found: {tokens}"
-            assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
-            # token[2] can be memory or constant
-            self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
-        elif tokens[0] in ["call", "jneq"]:
-            assert len(tokens) == 2, f"found: {tokens}"
-            self.add_ins(unit.Instruction(tokens[0], unit.OperandC(unit.Label(tokens[1]))))
-        elif tokens[0] in ["hlt", "ret"]:
-            assert len(tokens) == 1, f"found: {tokens}"
-            self.add_ins(unit.Instruction(tokens[0]))
-        else:
-            raise ValueError(f"don't recognize the unit.instruction: {tokens}")
+        # elif tokens[0] in ["out"]:
+        #     assert len(tokens) == 3, f"found: {tokens}"
+        #     assert util.is_memory_operand(tokens[2]), f"found: {tokens}"
+        #     # token[1] can be memory or constant
+        #     self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
+        # elif tokens[0] in ["in"]:
+        #     assert len(tokens) == 3, f"found: {tokens}"
+        #     assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
+        #     # token[2] can be memory or constant
+        #     self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
+        # elif tokens[0] in ["mov", "add", "sub", "shl", "shr", "cmp", "and", "or"]:
+        #     assert len(tokens) == 3, f"found: {tokens}"
+        #     assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
+        #     # token[2] can be memory or constant
+        #     self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
+        # elif tokens[0] in ["call", "jneq"]:
+        #     assert len(tokens) == 2, f"found: {tokens}"
+        #     self.add_ins(unit.Instruction(tokens[0], unit.OperandC(unit.Label(tokens[1]))))
+        # elif tokens[0] in ["hlt", "ret"]:
+        #     assert len(tokens) == 1, f"found: {tokens}"
+        #     self.add_ins(unit.Instruction(tokens[0]))
+        # else:
+        #     raise ValueError(f"don't recognize the unit.instruction: {tokens}")
 
     def parse_data(self, tokens: List[str]):
         label = tokens[0]

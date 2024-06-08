@@ -5,17 +5,11 @@ module CHIPSET();
     reg execute_from_brom;
 
     // Stages
-    wire clk, clk0, clk1, clk2, clk3;
+    wire[0:3] clk;
+    wire[0:3] is_stage;
     CLOCK clock(
-        .clk(clk),
-        .clk0(clk0),
-        .clk0(clk1),
-        .clk0(clk2),
-        .clk0(clk3),
-        .is_stage0(is_stage0),
-        .is_stage1(is_stage1),
-        .is_stage2(is_stage2),
-        .is_stage3(is_stage3));
+        .clk(clk[0:3]),
+        .is_stage(is_stage[0:3]));
 
     // Boot Sequence
     //
@@ -45,15 +39,13 @@ module CHIPSET();
     MBLOCK_MUX mblock_mux(
         .mblock_address(mblock_address[15:0]),
         .mblock_selector(mblock_selector[1:0]),
+        .execute_from_brom(execute_from_brom),
+        .is_stage(is_stage[0:3]),
         .address0(program_counter),
         .address1(v0_source),
         .address2(v1_source),
         .address3(v2_source),
-        .is_stage0(is_stage0),
-        .is_write0(0),
-        .is_write1(0),
-        .is_write2(0),
-        .is_write3(0));
+        .is_write(4'b0000));
 
     MBLOCK mblock(
         .out(mblock_output),
@@ -74,7 +66,7 @@ module CHIPSET();
     INS_RESOLVER stage0(
         .v0(v0_source), .v1(v1_source), .v2(v2_source), .op(instruction_op),
         .full_ins(.mblock_output),
-        clk0);
+        clk[0]);
 
     // STAGE1
 
@@ -89,7 +81,7 @@ module CHIPSET();
     FETCH_AND_STORE stage1(
         .value(v0),
         .in(mblock_output),
-        .clk(clk1));
+        .clk(clk[1]));
 
     // STAGE2
 
@@ -109,8 +101,10 @@ module CHIPSET();
     wire[3:0] alu_op;
     wire[31:0] v2;
 
+    wire flag_alu_zero;
     ALU alu(
         .out(v2),
+        .is_zero(flag_alu_zero),
         .op(alu_op),
         .in0(v0),
         .in1(v1));
@@ -129,16 +123,5 @@ module CHIPSET();
         .out(program_counter),
         .in(program_counter_next),
         .clk(clk3));
-
-
-
-
-    // PROCESSOR processor(
-    //     .mblock_address(mblock_address),
-    //     .mblock_input(mblock_input),
-    //     .mblock_selector(mblock_selector),
-    //     .mblock_output(mblock_output),
-
-    // );
 
 endmodule

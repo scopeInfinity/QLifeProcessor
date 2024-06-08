@@ -11,7 +11,7 @@
 section .text
   main:
     # default write to R0
-    IN [R0], 0
+    IN *R0, 0
     # default reads from R0
-    OUT 0, [R0]
+    OUT 0, *R0
     jmp main
