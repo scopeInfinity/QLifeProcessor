@@ -25,12 +25,11 @@ class ParserTest(TestCase):
             (Operand.CONSTANT, 10)])
 
 
-        tokens = parse_line("add * 0x16    , 15, 20")
+        tokens = parse_line("add * 0x16 , *15")
         self.assertEqual(tokens.name, "ADD")
         self.assertEqual(tokens.values, [
             (Operand.ADDRESS, 22),
-            (Operand.CONSTANT, 15),
-            (Operand.CONSTANT, 20)])
+            (Operand.ADDRESS, 15)])
 
     def test_parse_line_failures(self):
         with self.assertRaises(ValueError):

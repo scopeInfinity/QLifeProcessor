@@ -83,22 +83,21 @@ class EncodedInstruction:
         bits[6]   = self.update_program_counter
         bits[7]   = self.mblock_is_write
 
-        return sum([bits[i]<<i for i in range(8)])
+        # Tip: bits[8..16] is free for now
 
-    def plug(self, a1, a2, ar):
+        return sum([bits[i]<<i for i in range(16)])
+
+    def plug(self, a1, ar):
         self.a1 = a1
-        self.a2 = a2
+        # result address (ar) is same as a2
+        # instructions like add reuses a2/ar as both input and result address
         self.ar = ar
-        assert self.a1 >= 0 and self.a1 < 256
-        assert self.a2 >= 0 and self.a2 < 256
-        assert self.ar >= 0 and self.ar < 256
         return self
 
     def encode_full(self) -> int:
-        assert self.a1 is not None, "need a1, a2 and ar for full instruction encoding"
-        assert self.a2 is not None, "need a1, a2 and ar for full instruction encoding"
-        assert self.ar is not None, "need a1, a2 and ar for full instruction encoding"
-        return (self.encode()<<24) + (self.a1<<16) + (self.a2<<8) + (self.ar)
+        assert self.a1 is not None, "need a1 and ar for full instruction encoding"
+        assert self.ar is not None, "need a1 and ar for full instruction encoding"
+        return (self.encode()<<16) + (self.a1<<8) + (self.ar)
 
 
 INSTRUCTIONS = {
@@ -147,48 +146,55 @@ def add_parser(*operand_types):
 
 @add_parser(Operand.ADDRESS, Operand.ADDRESS)
 def IN(ram_address, input_address):
-    # input_address, ram_address = parser.expect(Operand.POINTER, Operand.POINTER)
-    return INSTRUCTIONS["IN"].plug(input_address, 0, ram_address)
+    return INSTRUCTIONS["IN"].plug(input_address, ram_address)
 
-def OUT(address:int, out_address: int):
-    return INSTRUCTIONS["OUT"].plug(address, 0, out_address)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def OUT(out_address: int, ram_address:int):
+    return INSTRUCTIONS["OUT"].plug(ram_address, out_address)
 
 @add_parser(Operand.ADDRESS, Operand.ADDRESS)
 def MOV(dst:int, src: int):
-    return INSTRUCTIONS["MOV"].plug(src, 0, dst)
+    return INSTRUCTIONS["MOV"].plug(src, dst)
 
 @add_parser(Operand.ADDRESS, Operand.CONSTANT)
 def MOVC(dst:int, const: int):
-    return INSTRUCTIONS["MOVC"].plug(const, 0, dst)
+    return INSTRUCTIONS["MOVC"].plug(const, dst)
 
-@add_parser(Operand.ADDRESS, Operand.ADDRESS, Operand.ADDRESS)
-def ADD(dst:int, src1: int, src2: int):
-    return INSTRUCTIONS["ADD"].plug(src1, src2, dst)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def ADD(dst:int, src: int):
+    return INSTRUCTIONS["ADD"].plug(src, dst)
 
-@add_parser(Operand.ADDRESS, Operand.ADDRESS, Operand.ADDRESS)
-def SUB(dst:int, src1: int, src2: int):
-    return INSTRUCTIONS["SUB"].plug(src1, src2, dst)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def SUB(dst:int, src: int):
+    return INSTRUCTIONS["SUB"].plug(src, dst)
 
-def SHL(dst:int, src1: int, src2: int):
-    return INSTRUCTIONS["SHL"].plug(src1, src2, dst)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def SHL(dst:int, shift: int):
+    return INSTRUCTIONS["SHL"].plug(shift, dst)
 
-def SHR(dst:int, src1: int, src2: int):
-    return INSTRUCTIONS["SHR"].plug(src1, src2, dst)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def SHR(dst:int, shift: int):
+    return INSTRUCTIONS["SHR"].plug(shift, dst)
 
-def AND(dst:int, src1: int, src2: int):
-    return INSTRUCTIONS["AND"].plug(src1, src2, dst)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def AND(dst:int, src: int):
+    return INSTRUCTIONS["AND"].plug(src, dst)
 
-def OR(dst:int, src1: int, src2: int):
-    return INSTRUCTIONS["OR"].plug(src1, src2, dst)
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
+def OR(dst:int, src: int):
+    return INSTRUCTIONS["OR"].plug(src, dst)
 
+@add_parser(Operand.ADDRESS, Operand.ADDRESS)
 def CMP(src1: int, src2: int):
     return INSTRUCTIONS["CMP"].plug(src1, src2)
 
+@add_parser(Operand.CONSTANT)
 def JMP(location:int):
-    return INSTRUCTIONS["JMP"].plug(location, 0, 0)
+    return INSTRUCTIONS["JMP"].plug(location, 0)
 
+@add_parser(Operand.CONSTANT)
 def JEQ(location:int):
-    return INSTRUCTIONS["JEQ"].plug(location, 0, 0)
+    return INSTRUCTIONS["JEQ"].plug(location, 0)
 
 def parse(tokens: InstructionTokens):
     return _PARSER_MAPPING[tokens.name](tokens)

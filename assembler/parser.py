@@ -47,7 +47,12 @@ def parse_line(line: str) -> InstructionTokens:
         op = op.strip()
         if len(op) == 0:
             raise ValueError(f"no-length operand found in {line}")
-        if op.startswith("*"):
+        if op.startswith("R"):
+            if len(op) != 2 or op[1] not in "0123456789":
+                raise ValueError("Invalid mem-register {op} provided, only R0..R9 supported.")
+            optype = TokenType.ADDRESS
+            op = op[1:]
+        elif op.startswith("*"):
             optype = TokenType.ADDRESS
             op = op[1:].lstrip()
         else:
