@@ -1,25 +1,31 @@
 from enum import Enum
-import inspect
-from typing import List
+from typing import List, Optional, Tuple
 
-from assembler.parser import Operand, InstructionTokens, TokenType
+from assembler import unit, util
 
-# Global parser map to instruction encoder
-_PARSER_MAPPING = {}
+# # Global parser map to instruction encoder
+# _PARSER_MAPPING = {}
 
 class MBlockSelector(Enum):
+    '''MBlockSelector defines the purpose of value_s[i].'''
     DONT_CARE = -1
-    RAM = 0
-    AUTO_BRAM = 1 # BROM is execute_from_brom else RAM
+    RAM = 0  # value[i] => RAM[value_s[i]]
+    # TODO: Claim, we don't need AUTO_BRAM
+    # We should never be reading any data from boot_ram. Any tiny miny data should be
+    # part of instruction set as CONST.
+    # AUTO_BRAM = 1 # value[i] => BROM[value_s[i]] is execute_from_brom else RAM
     IO = 2
     CONST = 3
+
+    # TODO: What happens if we try to write on a CONST.
 
     @staticmethod
     def wire(sel, do_not_care = None) -> List:
         if sel == MBlockSelector.DONT_CARE:
             assert do_not_care is not None
             sel = do_not_care
-        assert sel.value >= 0 and sel.value < 4
+
+        assert sel in [MBlockSelector.RAM, MBlockSelector.IO, MBlockSelector.CONST], "found: %s" % (sel)
         return [sel.value%2, sel.value>>1]
 
 class ALU(Enum):
@@ -27,7 +33,7 @@ class ALU(Enum):
     SUB = 1
     SHL = 2
     SHR = 3
-    LEFT = 4
+    PASS_R = 4
     AND = 5
     OR = 6
 
@@ -38,163 +44,151 @@ class ALU(Enum):
 
 class EncodedInstruction:
     def __init__(self,
-                mblock_selector1: MBlockSelector,
-                mblock_selector2: MBlockSelector,
+                mblock_selector_r: MBlockSelector,
+                mblock_selector_rw: MBlockSelector,
                 alu_op: ALU,
-                mblock_selector3: MBlockSelector,
                 mblock_is_write: bool,
                 update_program_counter: bool) -> None:
-        self.mblock_selector1 = mblock_selector1
-        self.mblock_selector2 = mblock_selector2
+        self.mblock_selector_r = mblock_selector_r
+        self.mblock_selector_rw = mblock_selector_rw
         self.alu_op = alu_op
-        self.mblock_selector3 = mblock_selector3
         self.mblock_is_write = mblock_is_write
         self.update_program_counter = update_program_counter
 
+        self.address_r = None
+        self.address_rw = None
+
+
     def encode(self):
+        # value_r  = &mblock_resolve(address_r)
+        # value_rw = &mblock_resolve(address_rw)
+        # value_rw = op(value_r, [value_rw])
+
         bits = [0]*32
 
-        # bits[ 8:16] is address1
-        # bits[16:24] is address2
-        # bits[24:32] is address3
+        # Implemented in encode_full(...)
+        # bits[16:24] is address_r (address to read only from)
+        # bits[24:32] is address_rw (address to read from or write to)
 
-        # assign mblock_selector2 = 0b01
-        # We assume mblock_selector2 to always be AUTO_BRAM.
-        # Because an instruction meant it to be AUTO_BRAM or DONT_CARE.
-        assert self.mblock_selector2 == MBlockSelector.AUTO_BRAM or (self.mblock_selector2 == MBlockSelector.DONT_CARE and self.alu_op == ALU.LEFT)
-
-        # assign mblock_selector3[0] = 0
-        # We assume mblock_selector3 to always be RAM or IO.
-        # Because an instruction meant it to be RAM, IO or DONT_CARE.
-        assert (
-            self.mblock_selector3 == MBlockSelector.RAM or
-            self.mblock_selector3 == MBlockSelector.IO or
-            (self.mblock_selector3 == MBlockSelector.DONT_CARE and not self.mblock_is_write)
-        )
-        mblock_selector3_wire = MBlockSelector.wire(self.mblock_selector3, do_not_care=MBlockSelector.RAM)
-        assert (
-            MBlockSelector.wire(MBlockSelector.RAM, do_not_care=MBlockSelector.RAM)[1]^
-            MBlockSelector.wire(MBlockSelector.IO, do_not_care=MBlockSelector.RAM)[1]) != 0b10, (
-                "mselector only 1th bit is expected to be different for RAM and IO")
-
-        bits[0:2] = MBlockSelector.wire(self.mblock_selector1)
-        bits[2]   = mblock_selector3_wire[1]
-        bits[3:6] = ALU.wire(self.alu_op)
-        bits[6]   = self.update_program_counter
-        bits[7]   = self.mblock_is_write
-
-        # Tip: bits[8..16] is free for now
+        bits[0:2] = MBlockSelector.wire(self.mblock_selector_r)
+        bits[2:4] = MBlockSelector.wire(self.mblock_selector_rw, do_not_care=MBlockSelector.CONST)
+        bits[4:7] = ALU.wire(self.alu_op)[0:3]
+        bits[7]   = self.update_program_counter
+        bits[8]   = self.mblock_is_write
 
         return sum([bits[i]<<i for i in range(16)])
 
-    def plug(self, a1, ar):
-        self.a1 = a1
-        # result address (ar) is same as a2
-        # instructions like add reuses a2/ar as both input and result address
-        self.ar = ar
-        return self
-
-    def encode_full(self) -> int:
-        assert self.a1 is not None, "need a1 and ar for full instruction encoding"
-        assert self.ar is not None, "need a1 and ar for full instruction encoding"
-        return (self.encode()<<16) + (self.a1<<8) + (self.ar)
+    def plug(self, address_rw: unit.LazyLabel, address_r: unit.LazyLabel):
+        return FullyEncodedInstruction(self, address_rw, address_r)
 
 
-INSTRUCTIONS = {
-    "IN": EncodedInstruction(MBlockSelector.IO, MBlockSelector.DONT_CARE, ALU.LEFT, MBlockSelector.RAM, True, False),
-    "OUT":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.DONT_CARE, ALU.LEFT, MBlockSelector.IO, True, False),
+class FullyEncodedInstruction:
+    def __init__(self, encoded_instruction: EncodedInstruction, address_rw: unit.LazyLabel, address_r: unit.LazyLabel) -> None:
+        self.address_rw = address_rw
+        self.address_r = address_r
+        self.encoded_instruction = encoded_instruction
+
+    def get_binary(self, ensure_resolved=False) ->  List[unit.Data]:
+        encoded = self.encoded_instruction.encode()
+        return [
+            unit.Data(encoded%256),
+            unit.Data(encoded//256),
+            unit.Data(self.address_r.get(ensure_resolved=ensure_resolved)),
+            unit.Data(self.address_rw.get(ensure_resolved=ensure_resolved))
+        ]
+
+    def size(self):
+        return 4  # bytes
+
+
+class ParserInstruction:
+    def __init__(self, name: str, type_rw: unit.Operand, type_r: unit.Operand, encoded_instruction: EncodedInstruction):
+        self.name = name
+        self.type_rw = type_rw
+        self.type_r = type_r
+        self.encoded_instruction = encoded_instruction
+
+    def expects_operands(self):
+        expects = []
+        if self.type_rw != unit.Operand.IGNORE:
+            expects.append(self.type_rw)
+        if self.type_r != unit.Operand.IGNORE:
+            expects.append(self.type_r)
+        return expects
+
+    def parse(self, values: List[Tuple[unit.Operand, int]]):
+        return ParsedInstruction(self, values)
+
+    def __str__(self) -> str:
+        expects = ', '.join([str(x) for x in self.expects_operands()])
+        return "%s %s" % (self.name, expects)
+
+
+class ParsedInstruction:
+    def __init__(self, _parser: ParserInstruction, values: List[Tuple[unit.Operand, unit.LazyLabel]]):
+        self.parser = _parser
+        self.values = values
+        self.fully_encoded_instruction = self.get_fully_encoded_instruction(values)
+
+    def get_fully_encoded_instruction(self, values: List[Tuple[unit.Operand, unit.LazyLabel]]):
+        if self.parser.expects_operands() != [t[0] for t in values]:
+            raise ValueError(f"{self.parser.name} want operand type {self.parser.expects_operands()}, given operand values {values}")
+        values_index = 0
+        if self.parser.type_rw != unit.Operand.IGNORE:
+            address_rw = values[values_index][1]
+            values_index+=1
+        else:
+            address_rw = unit.LazyLabel(util.LABEL_CONSTANT, 0)
+        if self.parser.type_r != unit.Operand.IGNORE:
+            address_r = values[values_index][1]
+            values_index+=1
+        else:
+            address_r = unit.LazyLabel(util.LABEL_CONSTANT, 0)
+        assert len(values) == values_index
+        return self.parser.encoded_instruction.plug(address_rw, address_r)
+
+    def get_str(self, resolved=False, binary=False):
+        if binary:
+            assert resolved
+            return ''.join([x.get_str(binary=True) for x in self.fully_encoded_instruction.get_binary(ensure_resolved=True)])
+
+        printable_values = []
+        for val_type, val in self.values:
+            assert val_type in [unit.Operand.ADDRESS, unit.Operand.CONSTANT]
+            if val_type == unit.Operand.ADDRESS:
+                printable_values.append("[%s]" % (val.get_str(resolved=resolved)))
+            else:
+                printable_values.append("%s" % (val.get_str(resolved=resolved)))
+        return "%s %s" % (self.parser.name, ', '.join(printable_values))
+
+    def __str__(self):
+        return self.get_str(resolved=False, binary=False)
+
+    def size(self):
+        return self.fully_encoded_instruction.size()
+
+INSTRUCTIONS = [
+    ParserInstruction("IN", unit.Operand.ADDRESS, unit.Operand.ADDRESS, EncodedInstruction(MBlockSelector.IO, MBlockSelector.RAM, ALU.PASS_R, True, False)),
+    ParserInstruction("OUT", unit.Operand.ADDRESS, unit.Operand.ADDRESS, EncodedInstruction(MBlockSelector.RAM, MBlockSelector.IO, ALU.PASS_R, True, False)),
     # CALL?
     # HLT?
-    "MOV":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.DONT_CARE, ALU.LEFT, MBlockSelector.RAM, True, False),
-    "MOVC":  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.LEFT, MBlockSelector.RAM, True, False),
-    "ADD":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.ADD, MBlockSelector.RAM, True, False),
-    "SUB":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.SUB, MBlockSelector.RAM, True, False),
-    "SHL":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.SHL, MBlockSelector.RAM, True, False),
-    "SHR":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.SHR, MBlockSelector.RAM, True, False),
-    "AND":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.AND, MBlockSelector.RAM, True, False),
-    "OR":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.OR, MBlockSelector.RAM, True, False),
+    ParserInstruction("MOV", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.PASS_R, True, False)),
+    ParserInstruction("MOVC", unit.Operand.ADDRESS, unit.Operand.CONSTANT,  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.RAM, ALU.PASS_R, True, False)),
+    ParserInstruction("ADD", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.ADD, True, False)),
+    ParserInstruction("SUB", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.SUB, True, False)),
+    ParserInstruction("SHL", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.SHL, True, False)),
+    ParserInstruction("SHR", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.SHR, True, False)),
+    ParserInstruction("AND", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.AND, True, False)),
+    ParserInstruction("OR", unit.Operand.ADDRESS, unit.Operand.ADDRESS, EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.OR, True, False)),
 
-    "CMP":  EncodedInstruction(MBlockSelector.AUTO_BRAM, MBlockSelector.AUTO_BRAM, ALU.SUB, MBlockSelector.DONT_CARE, False, False),
-    "JMP":  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.LEFT, MBlockSelector.DONT_CARE, False, True),
-    "JEQ":  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.LEFT, MBlockSelector.DONT_CARE, False, True),
-}
+    ParserInstruction("CMP", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.SUB, False, False)),
+    ParserInstruction("JMP", unit.Operand.IGNORE, unit.Operand.CONSTANT,  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.PASS_R, False, True)),
+    ParserInstruction("JEQ", unit.Operand.IGNORE, unit.Operand.CONSTANT,  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.PASS_R, False, True))
+]
 
-def generate_parser(instruction_fn, args_type: List[Operand]):
-    def token_parser(tokens: InstructionTokens):
-        if len(tokens.values) != len(args_type):
-            raise ValueError(f"Invalid number of token for {tokens.name} instruction name")
-        # Assert args_type and tokens type as same before calling
-        for tok, arg_type in zip(tokens.values, args_type):
-            if (tok[0] != arg_type):
-                raise ValueError(f"Invalid arguments type provided in {tokens}")
-        return instruction_fn(*[tok[1] for tok in tokens.values])
-    return token_parser
-
-def add_parser(*operand_types):
-    def _add_parser(instruction_fn):
-        def inner(*args):
-            return instruction_fn(*args)
-
-        args_name = inspect.getfullargspec(instruction_fn)
-        print(f"{instruction_fn.__name__} has {args_name} as {operand_types}")
-        # TODO: Limit compile time errors
-        # assert len(args_name) == len(args)
-        inner.parse = generate_parser(inner, operand_types)
-        _PARSER_MAPPING[instruction_fn.__name__] = inner.parse
-        return inner
-    return _add_parser
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def IN(ram_address, input_address):
-    return INSTRUCTIONS["IN"].plug(input_address, ram_address)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def OUT(out_address: int, ram_address:int):
-    return INSTRUCTIONS["OUT"].plug(ram_address, out_address)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def MOV(dst:int, src: int):
-    return INSTRUCTIONS["MOV"].plug(src, dst)
-
-@add_parser(Operand.ADDRESS, Operand.CONSTANT)
-def MOVC(dst:int, const: int):
-    return INSTRUCTIONS["MOVC"].plug(const, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def ADD(dst:int, src: int):
-    return INSTRUCTIONS["ADD"].plug(src, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def SUB(dst:int, src: int):
-    return INSTRUCTIONS["SUB"].plug(src, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def SHL(dst:int, shift: int):
-    return INSTRUCTIONS["SHL"].plug(shift, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def SHR(dst:int, shift: int):
-    return INSTRUCTIONS["SHR"].plug(shift, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def AND(dst:int, src: int):
-    return INSTRUCTIONS["AND"].plug(src, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def OR(dst:int, src: int):
-    return INSTRUCTIONS["OR"].plug(src, dst)
-
-@add_parser(Operand.ADDRESS, Operand.ADDRESS)
-def CMP(src1: int, src2: int):
-    return INSTRUCTIONS["CMP"].plug(src1, src2)
-
-@add_parser(Operand.CONSTANT)
-def JMP(location:int):
-    return INSTRUCTIONS["JMP"].plug(location, 0)
-
-@add_parser(Operand.CONSTANT)
-def JEQ(location:int):
-    return INSTRUCTIONS["JEQ"].plug(location, 0)
-
-def parse(tokens: InstructionTokens):
-    return _PARSER_MAPPING[tokens.name](tokens)
+def get_parser(name: str) -> ParserInstruction:
+    name = name.upper()
+    for ins in INSTRUCTIONS:
+        if name == ins.name:
+            return ins
+    raise ValueError(f"Instruction parser for '{name}' not found")

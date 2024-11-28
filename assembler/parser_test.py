@@ -1,42 +1,39 @@
 from unittest import TestCase
 
-from assembler.parser import parse_line, Operand
+from assembler import parser
+from assembler import unit
+
 
 class ParserTest(TestCase):
 
     def test_parse_line_success(self):
-        tokens = parse_line("mov *10, *20")
-        self.assertEqual(tokens.name, "MOV")
-        self.assertEqual(tokens.values, [
-            (Operand.ADDRESS, 10),
-            (Operand.ADDRESS, 20)])
+        name, tokens = parser.parse_line("mov [10], [20]")
+        self.assertEqual(name, "MOV")
+        self.assertEqual(tokens, [
+            (unit.Operand.ADDRESS, 10),
+            (unit.Operand.ADDRESS, 20)])
 
+        name, tokens = parser.parse_line("movc [30], 0x15")
+        self.assertEqual(name, "MOVC")
+        self.assertEqual(tokens, [
+            (unit.Operand.ADDRESS, 30),
+            (unit.Operand.CONSTANT, 21)])
 
-        tokens = parse_line("movc *30, 0x15")
-        self.assertEqual(tokens.name, "MOVC")
-        self.assertEqual(tokens.values, [
-            (Operand.ADDRESS, 30),
-            (Operand.CONSTANT, 21)])
+        name, tokens = parser.parse_line("jmp 10")
+        self.assertEqual(name, "JMP")
+        self.assertEqual(tokens, [
+            (unit.Operand.CONSTANT, 10)])
 
-
-        tokens = parse_line("jmp 10")
-        self.assertEqual(tokens.name, "JMP")
-        self.assertEqual(tokens.values, [
-            (Operand.CONSTANT, 10)])
-
-
-        tokens = parse_line("add * 0x16 , *15")
-        self.assertEqual(tokens.name, "ADD")
-        self.assertEqual(tokens.values, [
-            (Operand.ADDRESS, 22),
-            (Operand.ADDRESS, 15)])
+        name, tokens = parser.parse_line("add [ 0x16 ] , [15 ]")
+        self.assertEqual(name, "ADD")
+        self.assertEqual(tokens, [
+            (unit.Operand.ADDRESS, 22),
+            (unit.Operand.ADDRESS, 15)])
 
     def test_parse_line_failures(self):
         with self.assertRaises(ValueError):
-            parse_line("mov *10,, *20")
+            parser.parse_line("mov [10],, [20]")
         with self.assertRaises(ValueError):
-            parse_line("mov *10, **20")
+            parser.parse_line("mov [10], [[20]]")
         with self.assertRaises(ValueError):
-            parse_line("mov *10, AB")
-        with self.assertRaises(ValueError):
-            parse_line("mov 10 10")
+            parser.parse_line("mov 10 10")

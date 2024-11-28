@@ -12,15 +12,15 @@ PROGRAM_START equ 0x20
 section .text
   main:
     # read metadata: program size
-    mov [R1], 0
-    OUT 0, [R1]
-    IN [R0], 0
+    mov [R1], 0  # const -> ram
+    OUT 0, [R1]  # ram -> io
+    IN [R0], 0   # io -> ram
 
-    mov [R2], PROGRAM_START
-    mov [R1], 1
+    mov [R2], PROGRAM_START  # const -> ram
+    mov [R1], 1              # const -> ram
   _copy_more:
-    OUT 0, [R1]
-    IN [R2], 0
+    OUT 0, [R1]              # ram -> io
+    IN [R2], 0               # io -> ram
     add [R2], 1
     add [R1], 1
     # bytes left to copy
@@ -30,3 +30,5 @@ section .text
 
   _copy_completed:
     jmp _copy_completed
+
+

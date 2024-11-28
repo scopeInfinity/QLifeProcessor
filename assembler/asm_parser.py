@@ -1,55 +1,57 @@
-import re
-from typing import List, Union
+import logging
+from typing import List, Union, Optional
 
-import unit
-import util
+from assembler import instruction, unit, util
 
-from assembler import instruction
+from assembler import parser
 
-BOILERPLATE_INS_APPEND = '''
-    section .bss
-    R0: resb 1
-    R1: resb 1
-    R2: resb 1
-    R3: resb 1
-    R4: resb 1
-    R5: resb 1
-    R6: resb 1
-    R8: resb 1
-'''
+class LabelsManager:
+    def __init__(self):
+        self.labels = {}
+        self.passive_labels = []
+
+    def add_lazy(self, lazy: unit.LazyLabel):
+        if lazy.name == util.LABEL_CONSTANT:
+            # do nothing
+            return
+        self.passive_labels.append(lazy)
+
+    def propogate(self):
+        for label in self.passive_labels:
+            if label.name not in self.labels:
+                raise ValueError(f"'{label.name}' couldn't be resolved")
+            label.assign(self.labels[label.name])
+
+    def new_label(self, name: str, value: int):
+        label = unit.LazyLabel(name, value)
+        assert name not in self.labels, f"repeated label found: {name}"
+        # this is already resolved label
+        assert isinstance(value, int)
+        self.labels[name] = label
+        return label
+
 
 class AsmParser:
-    @staticmethod
-    def get_instance():
-        if not hasattr(AsmParser, "_instance"):
-            AsmParser._instance = AsmParser()
-        return AsmParser._instance
-
     def __init__(self) -> None:
         self.reset()
 
     def reset(self):
         self.address = 0
-        self.labels = {}
+        self.lm = LabelsManager()
         self.section = "text"
-        self.ins = []  # type: List[unit.unit.Instruction]
-        self.final_bytes = []  # type: Union[unit.unit.Instruction, unit.Data]
+        # self.ins = []  # type: List[instruction.ParsedInstruction]
+        self.final_bytes = []  # type: Union[instruction.ParsedInstruction, unit.Data]
 
-    def append_boilerplate(self):
-        assert not hasattr(self, "_append_boilerplay_run_once")
-        for line in BOILERPLATE_INS_APPEND.splitlines():
-            self.parse_line(line)
-        self._append_boilerplay_run_once = True
-
-    def get_section(self):
-        return self.section
-
-    def print(self, resolved=False, rom_binary=False):
-        '''Prints the instructions.
+    def get_str(self, resolved=False, rom_binary=False):
+        '''Get printable instructions.
 
         Also removes don't care byte(s) at the end coming
         from .bss section (if rom_binary is true).
         '''
+        if rom_binary:
+            resolved = True  # implict
+        if resolved:
+            self.lm.propogate()
         track_binary_address = None
         _content = []
         for add, x in self.final_bytes:
@@ -79,9 +81,18 @@ class AsmParser:
             assert len(_binary_content) % 8 == 0
             assert set(_binary_content) <= set(['0', '1']), "only binary context is expected"
 
-            content = '\n'.join([_binary_content[8*i:8*(i+1)] for i in range(len(_binary_content)//8)])
+            content = '\n'.join([
+                "%s %s %s %s" % (
+                    _binary_content[32*i:32*i+8],
+                    _binary_content[32*i+8:32*i+16],
+                    _binary_content[32*i+16:32*i+24],
+                    _binary_content[32*i+24:32*i+32])
+                    for i in range(len(_binary_content)//32)
+                    ])
+        return content
 
-        print(content)
+    def get_section(self):
+        return self.section
 
     def section_update(self, name):
         assert name in ["text", "data", "bss"]
@@ -95,18 +106,8 @@ class AsmParser:
     def add_address(self, add):
         self.address += add
 
-    def new_label(self, label, value = None):
-        "new label found for current address"
-        assert util.is_valid_label(label), f"'{label}' is not valid"
-        assert label not in self.labels.keys(), f"repeated label found: {label}"
-        self.labels[label] = value if value is not None else self.get_address()
-        assert isinstance(self.labels[label], int)
-
-    def get_label_value(self, label):
-        return self.labels[label]
-
-    def add_ins(self, ins: unit.Instruction):
-        self.ins.append(ins)
+    def add_ins(self, ins: instruction.ParsedInstruction):
+        # self.ins.append(ins)
         self.final_bytes.append((self.get_address(), ins))
         self.add_address(ins.size())
 
@@ -114,49 +115,25 @@ class AsmParser:
         self.final_bytes.append((self.get_address(), data))
         self.add_address(data.size())
 
-    def parse_text(self, tokens: List[str]):
+    def parse_text(self, tokens: List[str], line: str):
         if tokens[0].endswith(":"):
             # label
             assert len(tokens) == 1, "label: should exists in isolation in line"
             assert len(tokens[0]) >= 2, "label should be atleast 1 char long"
             label = tokens[0][:-1]
-            self.new_label(label)
-
-        elif tokens[0] == "jmp":
-            assert len(tokens) == 2, f"found: {tokens}"
-            self.add_ins(instruction.JMP(unit.OperandC(unit.Label(tokens[1]))))
-        elif tokens[0] in ["in"]:
-            assert len(tokens) == 3, f"found: {tokens}"
-            assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
-            # token[2] can be memory or constant
-            self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
-        # elif tokens[0] in ["out"]:
-        #     assert len(tokens) == 3, f"found: {tokens}"
-        #     assert util.is_memory_operand(tokens[2]), f"found: {tokens}"
-        #     # token[1] can be memory or constant
-        #     self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
-        # elif tokens[0] in ["in"]:
-        #     assert len(tokens) == 3, f"found: {tokens}"
-        #     assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
-        #     # token[2] can be memory or constant
-        #     self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
-        # elif tokens[0] in ["mov", "add", "sub", "shl", "shr", "cmp", "and", "or"]:
-        #     assert len(tokens) == 3, f"found: {tokens}"
-        #     assert util.is_memory_operand(tokens[1]), f"found: {tokens}"
-        #     # token[2] can be memory or constant
-        #     self.add_ins(unit.Instruction(tokens[0], unit.get_operand_cm(tokens[1]), unit.get_operand_cm(tokens[2])))
-        # elif tokens[0] in ["call", "jneq"]:
-        #     assert len(tokens) == 2, f"found: {tokens}"
-        #     self.add_ins(unit.Instruction(tokens[0], unit.OperandC(unit.Label(tokens[1]))))
-        # elif tokens[0] in ["hlt", "ret"]:
-        #     assert len(tokens) == 1, f"found: {tokens}"
-        #     self.add_ins(unit.Instruction(tokens[0]))
-        # else:
-        #     raise ValueError(f"don't recognize the unit.instruction: {tokens}")
+            self.lm.new_label(label, self.get_address())
+            return
+        ins_name, tokens = parser.parse_line(line)
+        if ins_name is None:
+            # no instruction
+            return
+        for _, token in tokens:
+            self.lm.add_lazy(token)
+        self.add_ins(instruction.get_parser(ins_name).parse(tokens))
 
     def parse_data(self, tokens: List[str]):
         label = tokens[0]
-        self.new_label(label)
+        self.lm.new_label(label, self.get_address())
 
         times = 1
         if tokens[1] == "times":
@@ -169,7 +146,7 @@ class AsmParser:
         elif tokens[1] == "dw":
             sz = 2
         else:
-            raise ValueError("invalid data size provided")
+            raise ValueError("unsupported data size provided")
 
         # unsigned integer only for now
         val = int(tokens[2])
@@ -183,7 +160,7 @@ class AsmParser:
         if len(tokens) == 3:
             assert tokens[0].endswith(":"), f"bss tokens: {tokens}"
             label = tokens[0][:-1]
-            self.new_label(label)
+            self.lm.new_label(label, self.get_address())
             tokens = tokens[1:]
 
         assert tokens[0] == "resb"
@@ -192,8 +169,8 @@ class AsmParser:
             self.add_data(unit.Data(None))
 
     def parse_constant(self, tokens: List[str]):
-        assert tokens[1] == "equ"
-        self.new_label(tokens[0], int(tokens[2], 0))
+        assert tokens[1].lower() == "equ"
+        self.lm.new_label(tokens[0], int(tokens[2], 0))
         return
 
     def parse_line(self, line: str):
@@ -205,21 +182,21 @@ class AsmParser:
             # comment
             return
         # case insensitive
-        tokens = [x for x in re.split(" |,", line.lower()) if len(x) > 0]
+        tokens = [x for x in line.split()]
 
-        if tokens[0] == "section":
-            assert len(tokens) == 2, "expects section <what>"
-            assert tokens[1].startswith(".")
-            self.section_update(tokens[1][1:])
+        if tokens[0].lower() == "section":
+            assert len(tokens) == 2,f"expects section <what>, line: {line}"
+            assert tokens[1].lower() in [".text", ".data", ".bss"]
+            self.section_update(tokens[1][1:].lower())
             return
 
-        if len(tokens) == 3 and tokens[1] == "equ":
+        if len(tokens) == 3 and tokens[1].lower() == "equ":
             # constants
             self.parse_constant(tokens)
             return
 
         if self.get_section() == "text":
-            self.parse_text(tokens)
+            self.parse_text(tokens, line)
         elif self.get_section() == "data":
             self.parse_data(tokens)
         elif self.get_section() == "bss":
