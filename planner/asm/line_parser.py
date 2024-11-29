@@ -1,22 +1,8 @@
 from enum import Enum
 import re
 from typing import List, Tuple, Optional
-from assembler import unit, util
+from planner import unit, util
 
-# class Operand(Enum):
-#     # Hardcoded values
-#     # mov ..., 5
-#     CONSTANT = 1
-#     # Hardcoded address, can be thought as variable
-#     # mov ..., [10]
-#     # mov [10], ...
-#     ADDRESS = 2
-#     # We don't have a concept of pointers yet.
-
-# class TokenType(Enum):
-#     INSTRUCTION = 1
-#     CONSTANT = 2
-#     ADDRESS = 3
 
 
 def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Operand, unit.LazyLabel]]]]:

@@ -1,10 +1,11 @@
 from unittest import TestCase
 
-from assembler import asm_parser
+from planner.asm import program_parser
 
 PROGRAM = """
 # Sample Program
 
+PROGRAM_ORG equ 0x40
 TOTAL equ 0x10
 
 section .text
@@ -17,7 +18,7 @@ loop:
     jeq loop_exit
     add R1, R3
     mov [last_value], R1
-    out [0x00], R1
+    out 0x00, R1
     jmp loop
 loop_exit:
     jmp loop_exit
@@ -30,19 +31,19 @@ last_value db 0
 class AsmParserTest(TestCase):
 
     def test_asm_parser_binary(self):
-        asm = asm_parser.AsmParser()
+        asm = program_parser.AsmParser()
         for line in PROGRAM:
             asm.parse_line(line)
         output = asm.get_str(resolved=True, rom_binary=True)
 
     def test_asm_parser_unresolved(self):
-        asm = asm_parser.AsmParser()
+        asm = program_parser.AsmParser()
         for line in PROGRAM:
             asm.parse_line(line)
         output = asm.get_str(resolved=False, rom_binary=False)
 
     def test_asm_parser_resolved(self):
-        asm = asm_parser.AsmParser()
+        asm = program_parser.AsmParser()
         for line in PROGRAM:
             asm.parse_line(line)
         output = asm.get_str(resolved=True, rom_binary=False)

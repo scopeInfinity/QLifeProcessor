@@ -1,14 +1,14 @@
 from unittest import TestCase
 
-from assembler import instruction
-from assembler import parser
+from planner import instruction
+from planner.asm import line_parser
 
 class InstructionTest(TestCase):
 
     def test_all_instructions_validation(self):
         all_instructions_sample_list = [
-            ("in R1, [20]", "IN [1], [20]"),
-            ("out [10], R2", "OUT [10], [2]"),
+            ("in R1, 20", "IN [1], 20"),
+            ("out 10, R2", "OUT 10, [2]"),
             ("mov R3, R1", "MOV [3], [1]"),
             ("movc R4, 0x2", "MOVC [4], 2"),
             ("add R5, [35]", "ADD [5], [35]"),
@@ -24,7 +24,7 @@ class InstructionTest(TestCase):
 
         instructions = set()
         for input_line, want in all_instructions_sample_list:
-            name, tokens = parser.parse_line(input_line)
+            name, tokens = line_parser.parse_line(input_line)
             self.assertIsNotNone(name)
             ins = instruction.get_parser(name).parse(tokens)
             self.assertEqual(want, str(ins))

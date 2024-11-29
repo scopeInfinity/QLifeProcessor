@@ -1,12 +1,7 @@
 import string
 
-# def is_memory_operand(msg):
-#     if msg.startswith("[") and msg.endswith("]"):
-#         return True
-#     return False
-
-
 LABEL_CONSTANT = "constant"
+PROGRAM_ORG = "PROGRAM_ORG"
 
 def is_valid_label(msg):
     if len(msg) == 0:

@@ -1,9 +1,9 @@
 import logging
 from typing import List, Union, Optional
 
-from assembler import instruction, unit, util
+from planner import instruction, unit, util
 
-from assembler import parser
+from planner.asm import line_parser
 
 class LabelsManager:
     def __init__(self):
@@ -52,14 +52,18 @@ class AsmParser:
             resolved = True  # implict
         if resolved:
             self.lm.propogate()
+        assert util.PROGRAM_ORG in self.lm.labels, f"{util.PROGRAM_ORG} label must be defined"
+
         track_binary_address = None
         _content = []
+        if not rom_binary:
+            _content.append(f"{util.PROGRAM_ORG} equ {self.lm.labels[util.PROGRAM_ORG].get()}")
         for add, x in self.final_bytes:
             if not rom_binary:
                 _content.append(f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}")
             else:
                 if track_binary_address is None:
-                    track_binary_address = add
+                    track_binary_address = add # first address can be util.PROGRAM_ORG
                 assert track_binary_address == add, "gaps found in binary representation"
                 out = f"{x.get_str(resolved=resolved, binary=True)}"
                 _content.append(out)
@@ -87,7 +91,7 @@ class AsmParser:
                     _binary_content[32*i+8:32*i+16],
                     _binary_content[32*i+16:32*i+24],
                     _binary_content[32*i+24:32*i+32])
-                    for i in range(len(_binary_content)//32)
+                    for i in range((len(_binary_content)+24)//32)
                     ])
         return content
 
@@ -123,7 +127,7 @@ class AsmParser:
             label = tokens[0][:-1]
             self.lm.new_label(label, self.get_address())
             return
-        ins_name, tokens = parser.parse_line(line)
+        ins_name, tokens = line_parser.parse_line(line)
         if ins_name is None:
             # no instruction
             return
@@ -171,6 +175,9 @@ class AsmParser:
     def parse_constant(self, tokens: List[str]):
         assert tokens[1].lower() == "equ"
         self.lm.new_label(tokens[0], int(tokens[2], 0))
+        if tokens[0] == util.PROGRAM_ORG:
+            assert self.get_address() == 0, f"{util.PROGRAM_ORG} must be the first label defined"
+            self.add_address(self.lm.labels[util.PROGRAM_ORG].get())
         return
 
     def parse_line(self, line: str):

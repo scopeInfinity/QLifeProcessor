@@ -1,7 +1,7 @@
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Union, Tuple
 
-from assembler import unit, util
+from planner import unit, util
 
 # # Global parser map to instruction encoder
 # _PARSER_MAPPING = {}
@@ -28,6 +28,13 @@ class MBlockSelector(Enum):
         assert sel in [MBlockSelector.RAM, MBlockSelector.IO, MBlockSelector.CONST], "found: %s" % (sel)
         return [sel.value%2, sel.value>>1]
 
+    @classmethod
+    def from_binary(cls, bin: List[int]):
+        assert len(bin) == 2
+        val = bin[0]+bin[1]*2
+        assert val >= 0 and val <= 3
+        return MBlockSelector(val)
+
 class ALU(Enum):
     ADD = 0
     SUB = 1
@@ -42,41 +49,74 @@ class ALU(Enum):
         assert sel.value >= 0 and sel.value < 8
         return [sel.value%2, (sel.value>>1)%2, sel.value>>2]
 
+    @classmethod
+    def from_binary(cls, bits: List[int]):
+        value = bits[0]+bits[1]*2+bits[2]*4
+        assert value >= 0 and value <= 6
+        return ALU(value)
+
+MAPPING = {
+    "mblock_selector_r" : [0, 1],
+    "mblock_selector_rw": [2, 3],
+    "alu_op"            : [4, 5, 6],
+    "update_pc"         : [7],
+    "mblock_is_write"   : [8],
+}
+
 class EncodedInstruction:
     def __init__(self,
                 mblock_selector_r: MBlockSelector,
                 mblock_selector_rw: MBlockSelector,
                 alu_op: ALU,
-                mblock_is_write: bool,
-                update_program_counter: bool) -> None:
+                mblock_is_write: Union[bool,int],
+                update_program_counter: Union[bool,int]) -> None:
         self.mblock_selector_r = mblock_selector_r
         self.mblock_selector_rw = mblock_selector_rw
         self.alu_op = alu_op
-        self.mblock_is_write = mblock_is_write
-        self.update_program_counter = update_program_counter
+        self.mblock_is_write = 1 if mblock_is_write else 0
+        self.update_program_counter = 1 if update_program_counter else 0
 
-        self.address_r = None
-        self.address_rw = None
 
+    @staticmethod
+    def assign_bits(bits: List[int], name: str, values: List[int]):
+        indexs = MAPPING[name]
+        assert len(indexs) == len(values)
+        for i, j in enumerate(indexs):
+            assert values[i] in [0,1]
+            bits[j] = values[i]
+
+    @staticmethod
+    def get_bits(bits: List[int], name: str):
+        return [bits[i] for i in MAPPING[name]]
 
     def encode(self):
         # value_r  = &mblock_resolve(address_r)
         # value_rw = &mblock_resolve(address_rw)
         # value_rw = op(value_r, [value_rw])
 
-        bits = [0]*32
+        bits = [0]*16
 
         # Implemented in encode_full(...)
         # bits[16:24] is address_r (address to read only from)
         # bits[24:32] is address_rw (address to read from or write to)
 
-        bits[0:2] = MBlockSelector.wire(self.mblock_selector_r)
-        bits[2:4] = MBlockSelector.wire(self.mblock_selector_rw, do_not_care=MBlockSelector.CONST)
-        bits[4:7] = ALU.wire(self.alu_op)[0:3]
-        bits[7]   = self.update_program_counter
-        bits[8]   = self.mblock_is_write
+        self.assign_bits(bits, "mblock_selector_r", MBlockSelector.wire(self.mblock_selector_r))
+        self.assign_bits(bits, "mblock_selector_rw", MBlockSelector.wire(self.mblock_selector_rw, do_not_care=MBlockSelector.CONST))
+        self.assign_bits(bits, "alu_op", ALU.wire(self.alu_op)[0:3])
+        self.assign_bits(bits, "update_pc",[self.update_program_counter])
+        self.assign_bits(bits, "mblock_is_write",[self.mblock_is_write])
 
         return sum([bits[i]<<i for i in range(16)])
+
+    @classmethod
+    def from_binary(cls, encoded: int):
+        encoded_bits = [1 if (encoded&(1<<i))>0 else 0 for i in range(16)]
+        mblock_selector_r = MBlockSelector.from_binary(cls.get_bits(encoded_bits, 'mblock_selector_r'))
+        mblock_selector_rw = MBlockSelector.from_binary(cls.get_bits(encoded_bits, 'mblock_selector_rw'))
+        alu_op = ALU.from_binary(cls.get_bits(encoded_bits, 'alu_op'))
+        update_program_counter = cls.get_bits(encoded_bits, 'update_pc')[0]
+        mblock_is_write = cls.get_bits(encoded_bits, 'mblock_is_write')[0]
+        return EncodedInstruction(mblock_selector_r, mblock_selector_rw, alu_op, mblock_is_write, update_program_counter)
 
     def plug(self, address_rw: unit.LazyLabel, address_r: unit.LazyLabel):
         return FullyEncodedInstruction(self, address_rw, address_r)
@@ -88,13 +128,21 @@ class FullyEncodedInstruction:
         self.address_r = address_r
         self.encoded_instruction = encoded_instruction
 
+    @classmethod
+    def from_binary(cls, ins: List[int]):
+        return cls(
+            EncodedInstruction.from_binary(ins[0]+(ins[1]<<8)),
+            unit.LazyLabel(util.LABEL_CONSTANT, ins[2]),
+            unit.LazyLabel(util.LABEL_CONSTANT, ins[3]),
+        )
+
     def get_binary(self, ensure_resolved=False) ->  List[unit.Data]:
         encoded = self.encoded_instruction.encode()
         return [
             unit.Data(encoded%256),
             unit.Data(encoded//256),
-            unit.Data(self.address_r.get(ensure_resolved=ensure_resolved)),
-            unit.Data(self.address_rw.get(ensure_resolved=ensure_resolved))
+            unit.Data(self.address_rw.get(ensure_resolved=ensure_resolved)),
+            unit.Data(self.address_r.get(ensure_resolved=ensure_resolved))
         ]
 
     def size(self):
@@ -168,8 +216,8 @@ class ParsedInstruction:
         return self.fully_encoded_instruction.size()
 
 INSTRUCTIONS = [
-    ParserInstruction("IN", unit.Operand.ADDRESS, unit.Operand.ADDRESS, EncodedInstruction(MBlockSelector.IO, MBlockSelector.RAM, ALU.PASS_R, True, False)),
-    ParserInstruction("OUT", unit.Operand.ADDRESS, unit.Operand.ADDRESS, EncodedInstruction(MBlockSelector.RAM, MBlockSelector.IO, ALU.PASS_R, True, False)),
+    ParserInstruction("IN", unit.Operand.ADDRESS, unit.Operand.CONSTANT, EncodedInstruction(MBlockSelector.IO, MBlockSelector.RAM, ALU.PASS_R, True, False)),
+    ParserInstruction("OUT", unit.Operand.CONSTANT, unit.Operand.ADDRESS, EncodedInstruction(MBlockSelector.RAM, MBlockSelector.IO, ALU.PASS_R, True, False)),
     # CALL?
     # HLT?
     ParserInstruction("MOV", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.PASS_R, True, False)),
@@ -183,6 +231,7 @@ INSTRUCTIONS = [
 
     ParserInstruction("CMP", unit.Operand.ADDRESS, unit.Operand.ADDRESS,  EncodedInstruction(MBlockSelector.RAM, MBlockSelector.RAM, ALU.SUB, False, False)),
     ParserInstruction("JMP", unit.Operand.IGNORE, unit.Operand.CONSTANT,  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.PASS_R, False, True)),
+    # TODO: Fix JEQ will always jump
     ParserInstruction("JEQ", unit.Operand.IGNORE, unit.Operand.CONSTANT,  EncodedInstruction(MBlockSelector.CONST, MBlockSelector.DONT_CARE, ALU.PASS_R, False, True))
 ]
 
