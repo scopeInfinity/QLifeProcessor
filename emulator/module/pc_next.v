@@ -34,5 +34,4 @@ module PC_NEXT(
         .out(program_counter),
         .in(program_counter_next),
         .clk(clk));
-endmodule;
-
+endmodule

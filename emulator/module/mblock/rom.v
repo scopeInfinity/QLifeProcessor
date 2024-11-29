@@ -13,7 +13,7 @@ module _ROM_32bit_16aline(
 
     assign out = buffer[address];
 
-endmodule;
+endmodule
 
 module ROM_BOOT(
         output[31:0] out,
@@ -23,4 +23,4 @@ module ROM_BOOT(
     _ROM_32bit_16aline #(.filename("emulator/module/mblock/rom_boot.bin"))
         dut(.out(out),
         .address(address));
-endmodule;
+endmodule

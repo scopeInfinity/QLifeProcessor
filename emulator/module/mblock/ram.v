@@ -12,4 +12,4 @@ module RAM_32bit_16aline(output[31:0] out,
     end
     assign out = mem[address];
 
-endmodule;
+endmodule

@@ -11,4 +11,4 @@ module INS_RESOLVER(output[7:0] v0, v1, v2, op,
     assign v2[7:0] = full_ins[23:16];
     assign op[7:0] = full_ins[31:24];
 
-endmodule;
+endmodule

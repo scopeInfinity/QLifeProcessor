@@ -32,4 +32,4 @@ module MBLOCK(output[31:0] out,
     MUX_8_2 m2(.value(out[23:16]), .A(out0[23:16]), .B(out1[23:16]), .D(out3[23:16]), .S(selector[1:0]));
     MUX_8_2 m3(.value(out[31:24]), .A(out0[31:24]), .B(out1[31:24]), .D(out3[31:24]), .S(selector[1:0]));
 
-endmodule;
+endmodule

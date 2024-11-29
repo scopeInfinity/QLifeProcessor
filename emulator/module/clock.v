@@ -51,5 +51,4 @@ module CLOCK(
 
     assign clk[0:3] = hw_clk[0:3];
     assign is_stage[0:3] = _is_stage[0:3];
-endmodule;
-
+endmodule

@@ -6,4 +6,4 @@ module MCONST(
     assign out[31:16] = 16'b0000000000000000;
     assign out[15:0] = in[15:0];
 
-endmodule;
+endmodule

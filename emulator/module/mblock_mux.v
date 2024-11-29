@@ -53,4 +53,4 @@ module MBLOCK_MUX(output[31:0] mblock_address,
     MUX_8_2 m2(.value(mblock_address[23:16]), .A(address0[23:16]), .B(address1[23:16]), ,C(address2[23:16]), .D(address3[23:16]), .S(mblock_selector[1:0]));
     MUX_8_2 m3(.value(mblock_address[31:24]), .A(address0[31:24]), .B(address1[31:24]), ,C(address2[31:24]), .D(address3[31:24]), .S(mblock_selector[1:0]));
 
-endmodule;
+endmodule
