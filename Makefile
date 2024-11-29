@@ -1,5 +1,6 @@
 SRC_DIR=.
 BUILD_DIR=build
+OUTPUT_DIR=output
 
 .PHONY: clean test
 
@@ -12,3 +13,10 @@ pytest:
 	pytest -s
 
 test: pytest test_verilog_modules
+
+$(OUTPUT_DIR)/programs/%.bin: programs/%.asm
+	mkdir -p $(dir $@)
+	python3 -m planner asm -b $^ > $@
+
+
+all: $(patsubst programs/%.asm, $(OUTPUT_DIR)/programs/%.bin, $(shell find programs/ -name '*.asm'))
