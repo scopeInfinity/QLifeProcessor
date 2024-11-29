@@ -1,6 +1,6 @@
 from planner.asm import program_parser
 from planner.sim import bin_parser
-from planner.sim import io
+from planner.sim import devices
 from unittest import TestCase
 
 
@@ -29,8 +29,8 @@ class BinParserTest(TestCase):
         binary_program = asm.get_str(resolved=True, rom_binary=True)
 
         _bin = bin_parser.BinRunner(binary_program)
-        fake_input = io.LatchInput("fake")
-        fake_ouput = io.Device()
+        fake_input = devices.LatchInput("fake")
+        fake_ouput = devices.Device()
 
         _bin.set_input_device(5, fake_input)
         _bin.set_output_device(6, fake_ouput)

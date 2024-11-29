@@ -3,7 +3,7 @@ import logging
 
 from typing import List, Optional
 from planner import instruction
-from planner.sim import io
+from planner.sim import devices
 
 PROGRAM_ORG = 0x40
 IO_DEVICES = 16
@@ -23,10 +23,10 @@ class BinRunner:
         self.is_powered_on = True
         # self.step()
 
-    def set_input_device(self, index: int, d: io.InputDevice):
+    def set_input_device(self, index: int, d: devices.InputDevice):
         self.input_devices[index] = d
 
-    def set_output_device(self, index: int, d: io.Device):
+    def set_output_device(self, index: int, d: devices.Device):
         self.output_devices[index] = d
 
     def parse(self, content: str):

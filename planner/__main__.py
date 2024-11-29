@@ -4,7 +4,7 @@ import logging
 
 from planner.asm import program_parser
 from planner.sim import bin_parser
-from planner.sim import io
+from planner.sim import devices
 
 
 def args_parser():
@@ -38,8 +38,8 @@ def main():
     if args.source == "bin":
         with open(args.bin_file, "r") as f:
             _bin = bin_parser.BinRunner(f.read())
-            _bin.set_input_device(5, io.Numpad("id(5), range(0-9)"))
-            _bin.set_output_device(6, io.IntegerOutput("Screen6"))
+            _bin.set_input_device(5, devices.Numpad("id(5), range(0-9)"))
+            _bin.set_output_device(6, devices.IntegerOutput("Screen6"))
             while True:
                 _bin.step()
 

@@ -13,8 +13,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
     - name: install dependencies
-      run: sudo apt install nasm
+      run: |
+        sudo apt install nasm
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+     - name: Install iverilog
+        run: |
+          git clone https://github.com/steveicarus/iverilog.git
+          cd iverilog
+          ./autogen.sh
+          ./configure
+          make
+          make install
+          cd ..
     - name: make test
       run: make test
     - name: make
