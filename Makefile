@@ -1,58 +1,22 @@
-BUILD = build
-OUTPUT = output
-SIMULATOR_FLAG := -DOPC_SIM_ENABLED
-OPC_CFLAGS = -nostdlib -nodefaultlibs
+SRC_DIR=.
+BUILD_DIR=build
+OUTPUT_DIR=output
 
-.PHONY: clean prep all artifacts
-
-all: prep $(BUILD)/greeting $(BUILD)/sim_greeting artifacts
+.PHONY: clean test
 
 clean:
-	rm -f $(BUILD)/*
+	rm -r $(BUILD_DIR)
 
-prep:
-	mkdir -p $(BUILD)/
-	mkdir -p $(OUTPUT)/
+include emulator/Makefile.mk
 
-# simulator specific rules
-$(BUILD)/sim_o: lib/sim.c
-	gcc -c -o $@ $< $(SIMULATOR_FLAG) -I include/
+pytest:
+	pytest -s
 
-$(BUILD)/sim_asm_o: lib/sim.asm
-	nasm -f elf64 -o $@ $^
+test: pytest test_verilog_modules
 
-$(BUILD)/sim_logging_o: lib/logging.c
-	gcc -c -o $@ $< $(SIMULATOR_FLAG) -I include/
+$(OUTPUT_DIR)/programs/%.bin: programs/%.asm
+	mkdir -p $(dir $@)
+	python3 -m planner asm -b $^ > $@
 
-$(BUILD)/logging_o: lib/logging.c
-	gcc -c -o $@ $< $(OPC_CFLAGS) -I include/
 
-$(BUILD)/sim_greeting: $(BUILD)/sim_o $(BUILD)/sim_asm_o $(BUILD)/greeting_o $(BUILD)/font_o $(BUILD)/sim_logging_o
-	gcc -o $@ $^
-
-$(BUILD)/greeting: linker.ld $(BUILD)/ourpc_asm_o $(BUILD)/greeting_o $(BUILD)/font_o $(BUILD)/logging_o
-	ld -T linker.ld -o $@ $(BUILD)/ourpc_asm_o $(BUILD)/greeting_o $(BUILD)/font_o $(BUILD)/logging_o
-
-# simulator agnostic rules
-$(BUILD)/font_o: lib/font.c
-	gcc -c -o $@ $(OPC_CFLAGS) $< -I include/
-
-$(BUILD)/ourpc_asm_o: lib/ourpc.asm
-	nasm -f elf64 -o $@ $^
-
-$(BUILD)/greeting_o: greetings.c
-	gcc -c -o $@ $(OPC_CFLAGS) $^ -I include/
-
-# independent helper tools
-$(BUILD)/text_to_led: text_to_led.c $(BUILD)/font_o
-	gcc -o $@ $^ -I include/
-
-# generate artifacts
-
-artifacts: $(OUTPUT)/sample_rom_text.txt $(OUTPUT)/objdump_greetings.txt
-
-$(OUTPUT)/sample_rom_text.txt: $(BUILD)/text_to_led
-	$^ "Happy Diwali!" > $@
-
-$(OUTPUT)/objdump_greetings.txt: $(BUILD)/greeting
-	objdump -D $(BUILD)/greeting > $@
+all: $(patsubst programs/%.asm, $(OUTPUT_DIR)/programs/%.bin, $(shell find programs/ -name '*.asm'))
