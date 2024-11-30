@@ -26,6 +26,9 @@ loop_exit:
 section .data
 last_value db 0
 
+section .bss
+no_use: resb 32
+
 """.splitlines()
 
 class AsmParserTest(TestCase):

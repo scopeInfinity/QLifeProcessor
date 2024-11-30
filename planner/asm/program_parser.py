@@ -149,6 +149,8 @@ class AsmParser:
             sz = 1
         elif tokens[1] == "dw":
             sz = 2
+        elif tokens[1] == "dd":
+            sz = 4
         else:
             raise ValueError("unsupported data size provided")
 
@@ -157,7 +159,7 @@ class AsmParser:
         assert val >= 0 and val < (2**(8*sz))
 
         for _ in range(times):
-            for byte in val.to_bytes(sz, 'big'):
+            for byte in val.to_bytes(sz, 'little'):
                 self.add_data(unit.Data(byte))
 
     def parse_bss(self, tokens: List[str]):

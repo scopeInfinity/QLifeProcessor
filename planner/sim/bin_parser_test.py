@@ -11,8 +11,18 @@ PROGRAM_ORG equ 0x40
 
 section .text
 main:
-    movc R2, 15
     movc R1, 0
+
+    # add array0+array1 to R1
+    movc R2, array0
+    load  R3, [R2]
+    add R1, R3
+    addc R2, 4
+    load  R3, [R2]
+    add R1, R3
+
+    movc R2, 15
+    # input(0x05)*15
     in   R4, 0x05
 loop_start:
     cmpc R2, 0
@@ -24,6 +34,12 @@ loop_end:
     out 0x06, R1
 loop_exit:
     jmp loop_exit
+
+section .data
+array0 dd 31
+array1 dd 24
+
+
 """.splitlines()
 
 class BinParserTest(TestCase):
@@ -44,4 +60,4 @@ class BinParserTest(TestCase):
         fake_input.set_input(56)
         for _ in range(100):
             _bin.step()
-        self.assertEqual(fake_ouput.get(), 56*15)
+        self.assertEqual(fake_ouput.get(), 31+24+56*15)

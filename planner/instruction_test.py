@@ -16,6 +16,10 @@ class InstructionTest(TestCase):
             ("jmp 0x55", "JMP 85"),
             ("jz 0x22", "JZ 34"),
 
+
+            ("load R3, [R1]", "LOAD [12], [[4]]"),
+            ("load R4, [[50]]", "LOAD [16], [[50]]"),
+
             ("add  R0, [10]", "ADD  [0], [10]"),
             ("addc R1, 10",   "ADDC [4], 10"),
             ("sub  R2, [20]", "SUB  [8], [20]"),

@@ -99,9 +99,10 @@ class ALU(Enum):
     SUB = 1
     SHL = 2
     SHR = 3
-    PASS_R = 4  # vr_value
-    AND = 5
-    OR = 6
+    PASS_R = 4   # vr_value
+    PASS_RW = 5  # vrw_value
+    AND = 6
+    OR = 7
 
     @staticmethod
     def wire(sel) -> List:
@@ -268,9 +269,11 @@ class ParsedInstruction:
 
         printable_values = []
         for val_type, val in self.values:
-            assert val_type in [unit.Operand.ADDRESS, unit.Operand.CONSTANT]
+            assert val_type in [unit.Operand.ADDRESS, unit.Operand.DADDRESS, unit.Operand.CONSTANT]
             if val_type == unit.Operand.ADDRESS:
                 printable_values.append("[%s]" % (val.get_str(resolved=resolved)))
+            elif val_type == unit.Operand.DADDRESS:
+                printable_values.append("[[%s]]" % (val.get_str(resolved=resolved)))
             else:
                 printable_values.append("%s" % (val.get_str(resolved=resolved)))
         return "%s %s" % (self.parser.name, ', '.join(printable_values))
@@ -304,6 +307,11 @@ INSTRUCTIONS = [
                                          MBlockSelector_stage2.DONT_CARE,
                                          MBlockSelector_stage3.VRW_SOURCE_RAM,
                                          ALU.PASS_R)),
+    ParserInstruction("LOAD", unit.Operand.ADDRESS, unit.Operand.DADDRESS,
+                      EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
+                                         MBlockSelector_stage2.VR_VALUE_RAM,
+                                         MBlockSelector_stage3.VRW_SOURCE_RAM,
+                                         ALU.PASS_RW)),
     ParserInstruction("CMP", unit.Operand.ADDRESS, unit.Operand.ADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
                                          MBlockSelector_stage2.VRW_SOURCE_RAM,

@@ -138,6 +138,8 @@ class BinRunner:
             return MASK&(rw>>r)
         if op == instruction.ALU.PASS_R:
             return MASK&(r)
+        if op == instruction.ALU.PASS_RW:
+            return MASK&(rw)
         if op == instruction.ALU.AND:
             return MASK&(rw&r)
         if op == instruction.ALU.OR:
