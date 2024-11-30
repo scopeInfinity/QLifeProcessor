@@ -19,6 +19,8 @@ class InstructionTest(TestCase):
 
             ("load R3, [R1]", "LOAD [12], [[4]]"),
             ("load R4, [[50]]", "LOAD [16], [[50]]"),
+            ("store [R1], R3", "STORE [[4]], [12]"),
+            ("store [[50]], R4", "STORE [[50]], [16]"),
 
             ("add  R0, [10]", "ADD  [0], [10]"),
             ("addc R1, 10",   "ADDC [4], 10"),

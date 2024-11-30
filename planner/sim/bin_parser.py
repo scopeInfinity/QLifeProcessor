@@ -102,6 +102,7 @@ class BinRunner:
         self,
         output_devices: List[devices.Device],
         vw_value: int,
+        vrw_value: int,
         vrw_source: int,
         sel: instruction.MBlockSelector_stage3):
         assert vrw_source >= 0 and vrw_source < 256
@@ -109,6 +110,8 @@ class BinRunner:
             return
         if sel == instruction.MBlockSelector_stage3.VRW_SOURCE_RAM:
             return self.write_ram(vrw_source, 4, vw_value)  # write using 8-bit address
+        if sel == instruction.MBlockSelector_stage3.VRW_VALUE_RAM:
+            return self.write_ram(vrw_value, 4, vw_value)  # write using 8-bit address
         if sel == instruction.MBlockSelector_stage3.VRW_SOURCE_IO:
             assert vw_value >= 0 and vw_value < (1<<32)
             output_devices[vrw_source].update(vw_value)
@@ -186,6 +189,7 @@ class BinRunner:
         self.m_fetch_and_store_stage3(
             self.output_devices,
             vw_value,
+            vrw_value,
             vrw_source,
             mblock_s3)
 

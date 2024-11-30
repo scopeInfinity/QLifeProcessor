@@ -1,3 +1,4 @@
+# TODO: This is not ready yet
 #  Program
 #       ROM[BootSequence]
 #
@@ -7,7 +8,7 @@
 #  * ROM[Program] address-line at 0
 #  Really small program to copy ROM[Program] to RAM[Program]
 
-PROGRAM_START equ 0x20
+PROGRAM_ORG equ 0x40
 
 section .text
   main:
@@ -17,18 +18,19 @@ section .text
     in   R0, 0   # io -> ram
     movc R8, 1
 
-    movc R2, PROGRAM_START    # const -> ram
+    movc R2, PROGRAM_ORG      # const -> ram
     movc R1, 1                # const -> ram
   _copy_more:
     out 0, R1                # ram -> io
     in  R3, 0                # io -> ram
     add R1, R8
     add R2, R8
-    store R2, R3             # ram -> ram
+    store [R2], R3             # ram -> ram
     # bytes left to copy
-    sub R0, 1
+    subc R0, 1
     cmp R0, R9
-    jneq _copy_more
+    jz _copy_completed
+    jmp _copy_more
 
   _copy_completed:
     jmp _copy_completed

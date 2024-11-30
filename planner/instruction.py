@@ -69,17 +69,12 @@ class MBlockSelector_stage2(Enum):
         return cls(val)
 
 class MBlockSelector_stage3(Enum):
-    '''
-    bits: [1  as is_no_write][.][.]
-    bits: [0][ 0 ][io_write else ram_write]
-    bits: [0][ 1 ][pc_next else pc_next_if_eq]
-
-    '''
-    NO_WRITE           = 4
-    VRW_SOURCE_RAM     = 0
-    VRW_SOURCE_IO      = 1
-    PC_NEXT            = 2
-    PC_NEXT_IF_ZERO    = 3
+    NO_WRITE           = 0
+    VRW_SOURCE_RAM     = 1
+    VRW_SOURCE_IO      = 2
+    VRW_VALUE_RAM      = 3
+    PC_NEXT            = 4
+    PC_NEXT_IF_ZERO    = 5
 
     @classmethod
     def wire(cls, sel) -> List:
@@ -312,6 +307,11 @@ INSTRUCTIONS = [
                                          MBlockSelector_stage2.VR_VALUE_RAM,
                                          MBlockSelector_stage3.VRW_SOURCE_RAM,
                                          ALU.PASS_RW)),
+    ParserInstruction("STORE", unit.Operand.DADDRESS, unit.Operand.ADDRESS,
+                      EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
+                                         MBlockSelector_stage2.VRW_SOURCE_RAM,
+                                         MBlockSelector_stage3.VRW_VALUE_RAM,
+                                         ALU.PASS_R)),
     ParserInstruction("CMP", unit.Operand.ADDRESS, unit.Operand.ADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
                                          MBlockSelector_stage2.VRW_SOURCE_RAM,

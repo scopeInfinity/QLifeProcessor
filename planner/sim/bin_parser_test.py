@@ -31,7 +31,10 @@ loop_start:
     add  R1, R4
     jmp loop_start
 loop_end:
-    out 0x06, R1
+    # answer is in R1
+    movc R2, 12 # memory address of R3
+    store [R2], R1
+    out 0x06, R3
 loop_exit:
     jmp loop_exit
 
