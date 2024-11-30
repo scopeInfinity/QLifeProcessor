@@ -10,7 +10,7 @@ clean:
 include emulator/Makefile.mk
 
 pytest:
-	pytest -s
+	pytest -s --log-cli-level=DEBUG
 
 test: pytest test_verilog_modules
 

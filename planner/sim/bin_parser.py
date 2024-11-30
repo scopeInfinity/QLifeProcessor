@@ -8,6 +8,10 @@ from planner.sim import devices
 PROGRAM_ORG = 0x40
 IO_DEVICES = 16
 
+def binary_array_num(arr: List[int]):
+    return sum([x<<(8*i) for i, x in enumerate(arr)])
+
+FLAGS_BIT_VW_ZERO = 0
 class BinRunner:
     def __init__(self, content):
         self.ram = []
@@ -17,10 +21,12 @@ class BinRunner:
             self.ram.append(random.randint(0, 256))
 
         self.parse(content)
-        self.pc = PROGRAM_ORG
+        self.pc_next = PROGRAM_ORG
+        self.pc = None
         # self.is_powered_on = False
         # self.step()
         self.is_powered_on = True
+        self.flags = [0]
         # self.step()
 
     def set_input_device(self, index: int, d: devices.InputDevice):
@@ -47,60 +53,83 @@ class BinRunner:
             else:
                 ans.append(self.ram[addr+i])
 
-        logging.info("RAM[%04x]: %s", addr, ans)
+        logging.info("RAM[%04x] => %s", addr, ans)
         return ans
 
-    @staticmethod
-    def m_fetch_and_store(
-        ram: List[int],
-        input_devices: List[int],
-        output_devices: List[int],
-        source: int,
-        sel: instruction.MBlockSelector,
-        mblock_is_write: bool,
-        value: Optional[int] = None,
-        to_be_ignored_sim_hack: Optional[bool] = False):
-        if not mblock_is_write:
-            if sel == instruction.MBlockSelector.RAM:
-                assert source >= 0 and source < len(ram)
-                return ram[source]
-            if sel == instruction.MBlockSelector.CONST:
-                assert source >= 0 and source < 256
-                return source
-            if sel == instruction.MBlockSelector.IO:
-                # assert source >= 0 and source < 16
-                if to_be_ignored_sim_hack:
-                    value = 0
-                else:
-                    # print(f"Input for device[{source}]: ", end="")
-                    value = input_devices[source].take_input()
-                    # value = int(input(), 0)
-                assert value >= 0 and value < (1<<32)
-                return value
-                # input_devices[source] = value
-                # return input_devices[source]
-        else:
-            if sel == instruction.MBlockSelector.RAM:
-                assert source >= 0 and source < len(ram)
-                assert value >= 0 and value < 256
-                ram[source] = value
-                return None
-            if sel == instruction.MBlockSelector.CONST:
-                # no-op
-                return
-            if sel == instruction.MBlockSelector.IO:
-                # assert source >= 0 and source < 16
-                assert value >= 0 and value < (1<<32)
-                # input_devices[source] = value
-                output_devices[source].update(value)
-                return
+    def write_ram(self, addr: int, count: int, value: int) -> List[int]:
+        arr_value = []
+        for i in range(count):
+            arr_value.append(value&255)
+            value>>=8
+
+        assert addr >= 0
+        for i in range(count):
+            self.ram[(i+addr)%len(self.ram)] = arr_value[i]
+
+        logging.info("RAM[%04x] <= %s", addr, arr_value)
+
+    def m_fetch_and_store_stage1(
+        self,
+        input_devices: List[devices.InputDevice],
+        vr_source: int,
+        sel: instruction.MBlockSelector_stage1):
+        assert vr_source >= 0 and vr_source < 256
+        if sel == instruction.MBlockSelector_stage1.VR_SOURCE_RAM:
+            return binary_array_num(self.read_ram(vr_source, 4))  # reading from 8-bit address
+        if sel == instruction.MBlockSelector_stage1.VR_SOURCE_CONST:
+            # resize from 1 to 4 bytes
+            return vr_source
+        if sel == instruction.MBlockSelector_stage1.VR_SOURCE_IO:
+            value = input_devices[vr_source].take_input()
+            assert value >= 0 and value < (1<<32)
+            return value
         raise Exception(f"unsupported selector: {sel}")
 
-    @staticmethod
-    def m_alu(rw: int, r: int, op: instruction.ALU):
-        assert rw>=0 and rw<256
-        assert r>=0 and r<256
-        MASK = 255
+
+    def m_fetch_and_store_stage2(
+        self,
+        vr_value: int,
+        vrw_source: int,
+        sel: instruction.MBlockSelector_stage2):
+        assert vrw_source >= 0 and vrw_source < 256
+        if sel == instruction.MBlockSelector_stage2.VR_VALUE_RAM:
+            return binary_array_num(self.read_ram(vr_value, 4))  # reading from 32-bit address
+        if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_RAM:
+            return binary_array_num(self.read_ram(vrw_source, 4))  # reading from 8-bit address
+        raise Exception(f"unsupported selector: {sel}")
+
+    def m_fetch_and_store_stage3(
+        self,
+        output_devices: List[devices.Device],
+        vw_value: int,
+        vrw_value: int,
+        vrw_source: int,
+        sel: instruction.MBlockSelector_stage3):
+        assert vrw_source >= 0 and vrw_source < 256
+        if sel == instruction.MBlockSelector_stage3.NO_WRITE:
+            return
+        if sel == instruction.MBlockSelector_stage3.VRW_SOURCE_RAM:
+            return self.write_ram(vrw_source, 4, vw_value)  # write using 8-bit address
+        if sel == instruction.MBlockSelector_stage3.VRW_VALUE_RAM:
+            return self.write_ram(vrw_value, 4, vw_value)  # write using 8-bit address
+        if sel == instruction.MBlockSelector_stage3.VRW_SOURCE_IO:
+            assert vw_value >= 0 and vw_value < (1<<32)
+            output_devices[vrw_source].update(vw_value)
+            return
+        if sel == instruction.MBlockSelector_stage3.PC_NEXT:
+            self.pc_next = vw_value
+            return
+        if sel == instruction.MBlockSelector_stage3.PC_NEXT_IF_ZERO:
+            # check previous vw_value flags
+            if self.flags[FLAGS_BIT_VW_ZERO] == 1:
+                self.pc_next = vw_value
+            return
+        raise Exception(f"unsupported selector: {sel}")
+
+    def m_alu(self, rw: int, r: int, op: instruction.ALU):
+        assert rw>=0 and rw<(1<<32)
+        assert r>=0 and r<(1<<32)
+        MASK = ((1<<32)-1)
         if op == instruction.ALU.ADD:
             return MASK&(rw+r)
         if op == instruction.ALU.SUB:
@@ -112,6 +141,8 @@ class BinRunner:
             return MASK&(rw>>r)
         if op == instruction.ALU.PASS_R:
             return MASK&(r)
+        if op == instruction.ALU.PASS_RW:
+            return MASK&(rw)
         if op == instruction.ALU.AND:
             return MASK&(rw&r)
         if op == instruction.ALU.OR:
@@ -128,53 +159,39 @@ class BinRunner:
         return pc+4
 
     def step(self):
+        self.pc = self.pc_next
+        self.pc_next = self.pc + 4
+        logging.info("PC: 0x%x, flags: %s", self.pc, self.flags)
         ins_binary = self.read_ram(self.pc, 4)
         ins = instruction.FullyEncodedInstruction.from_binary(ins_binary)
-        mblock_selector_r = ins.encoded_instruction.mblock_selector_r
-        mblock_selector_rw = ins.encoded_instruction.mblock_selector_rw
+        logging.info("Instruction data: %s", ins)
+        logging.info("Instruction encoding: %s",
+            [str(x) for x in instruction.get_parsers_from_encoding(ins.encoded_instruction)])
+        mblock_s1 = ins.encoded_instruction.mblock_s1
+        mblock_s2 = ins.encoded_instruction.mblock_s2
+        mblock_s3 = ins.encoded_instruction.mblock_s3
         alu_op = ins.encoded_instruction.alu_op
-        mblock_is_write = ins.encoded_instruction.mblock_is_write
-        update_program_counter = ins.encoded_instruction.update_program_counter
 
         vr_source = ins.address_r.get()
         vrw_source = ins.address_rw.get()
 
-        value_r = self.m_fetch_and_store(
-            self.ram,
+        vr_value = self.m_fetch_and_store_stage1(
             self.input_devices,
-            self.output_devices,
             vr_source,
-            mblock_selector_r,
-            False,
-            value=None
-            )
-        value_rw = self.m_fetch_and_store(
-            self.ram,
-            self.input_devices,
-            self.output_devices,
+            mblock_s1)
+        vrw_value = self.m_fetch_and_store_stage2(
+            vr_value,
             vrw_source,
-            mblock_selector_rw,
-            False,
-            value=None,
-            to_be_ignored_sim_hack = (alu_op == instruction.ALU.PASS_R)
-            )
+            mblock_s2)
 
-        value = self.m_alu(value_rw, value_r, alu_op)
-        flag_alu_zero = (value == 0)
+        vw_value = self.m_alu(vrw_value, vr_value, alu_op)
 
-        self.m_fetch_and_store(
-            self.ram,
-            self.input_devices,
+        self.m_fetch_and_store_stage3(
             self.output_devices,
+            vw_value,
+            vrw_value,
             vrw_source,
-            mblock_selector_rw,
-            mblock_is_write and self.is_powered_on,
-            value=value
-            )
+            mblock_s3)
 
-        self.pc = self.m_pc_next(
-            self.pc,
-            value,
-            flag_alu_zero,
-            update_program_counter,
-            self.is_powered_on)
+        self.flags[FLAGS_BIT_VW_ZERO] = 1 if (vw_value==0) else 0
+

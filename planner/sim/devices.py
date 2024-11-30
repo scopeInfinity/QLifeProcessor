@@ -1,5 +1,5 @@
 from typing import List
-import random
+import logging
 
 
 class Device:
@@ -53,8 +53,8 @@ class InputDevice(Device):
 
 
 class LatchInput(InputDevice):
-    def __init__(self, name: str):
-        super(LatchInput, self).__init__()
+    def __init__(self, name: str, **kwargs):
+        super(LatchInput, self).__init__(**kwargs)
         self.name = name
         self.update(0)
 

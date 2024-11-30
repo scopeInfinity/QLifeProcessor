@@ -15,7 +15,7 @@ main:
     movc R3, 1
 loop:
     cmp R1, R2
-    jeq loop_exit
+    jz loop_exit
     add R1, R3
     mov [last_value], R1
     out 0x00, R1
@@ -25,6 +25,9 @@ loop_exit:
 
 section .data
 last_value db 0
+
+section .bss
+no_use: resb 32
 
 """.splitlines()
 

@@ -55,6 +55,8 @@ class Operand(Enum):
     ADDRESS = 1
     CONSTANT = 2
     IGNORE = 3
+    # Address of address, equivalent of pointers
+    DADDRESS = 4
 
     def __repr__(self):
         return self.name

@@ -30,10 +30,14 @@ class ParserTest(TestCase):
             (unit.Operand.ADDRESS, 22),
             (unit.Operand.ADDRESS, 15)])
 
+        name, tokens = line_parser.parse_line("load [ 0x16 ] , [[15 ]]")
+        self.assertEqual(name, "LOAD")
+        self.assertEqual(tokens, [
+            (unit.Operand.ADDRESS, 22),
+            (unit.Operand.DADDRESS, 15)])
+
     def test_parse_line_failures(self):
         with self.assertRaises(ValueError):
             line_parser.parse_line("mov [10],, [20]")
-        with self.assertRaises(ValueError):
-            line_parser.parse_line("mov [10], [[20]]")
         with self.assertRaises(ValueError):
             line_parser.parse_line("mov 10 10")
