@@ -37,6 +37,11 @@ class LazyLabel:
         if not isinstance(o.value, int):
             raise ValueError(f"{name} resolution failed during assign as {o.value}")
 
+        if 0 > o.value:
+            raise ValueError("only >=0 label values are supported, got: {o.value}")
+        if o.value >= (1<<8):
+            raise ValueError(f"only 1-bit label values are supported, got: {o.value}")
+
         if self.value is None:
             self.value = o.value
         else:

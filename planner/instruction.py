@@ -98,23 +98,48 @@ class ALU(Enum):
     PASS_RW = 5  # vrw_value
     AND = 6
     OR = 7
+    XOR = 8
 
     @staticmethod
     def wire(sel) -> List:
-        assert sel.value >= 0 and sel.value < 8
-        return [sel.value%2, (sel.value>>1)%2, sel.value>>2]
+        return [sel.value%2, (sel.value>>1)%2, (sel.value>>2)%2, (sel.value>>3)]
 
     @classmethod
     def from_binary(cls, bits: List[int]):
-        value = bits[0]+bits[1]*2+bits[2]*4
-        assert value >= 0 and value <= 6
+        value = bits[0]+bits[1]*2+bits[2]*4+bits[3]*8
         return ALU(value)
 
+    @staticmethod
+    def execute(op, rw, r):
+        assert rw>=0 and rw<(1<<32)
+        assert r>=0 and r<(1<<32)
+        MASK = ((1<<32)-1)
+        if op == ALU.ADD:
+            return MASK&(rw+r)
+        if op == ALU.SUB:
+            # TODO: deal with negative number
+            return MASK&(rw-r)
+        if op == ALU.SHL:
+            return MASK&(rw<<r)
+        if op == ALU.SHR:
+            return MASK&(rw>>r)
+        if op == ALU.PASS_R:
+            return MASK&(r)
+        if op == ALU.PASS_RW:
+            return MASK&(rw)
+        if op == ALU.AND:
+            return MASK&(rw&r)
+        if op == ALU.OR:
+            return MASK&(rw|r)
+        if op == ALU.XOR:
+            return MASK&(rw^r)
+        raise Exception(f"unsupported ALU op: {op}")
+
 MAPPING = {
-    "alu_op"    : [0, 1, 2],
-    "mblock_s1" : [3, 4],
-    "mblock_s2" : [5],
-    "mblock_s3" : [6, 7, 8],
+    "alu_op"    : [0, 1, 2, 3],
+    "mblock_s1" : [4, 5],
+    "mblock_s2" : [6],
+    "mblock_s3" : [7, 8, 9],
 }
 
 class EncodedInstruction:
@@ -346,6 +371,7 @@ INSTRUCTIONS = [
         ("SHR", ALU.SHR),
         ("AND", ALU.AND),
         ("OR", ALU.OR),
+        ("XOR", ALU.XOR),
     ]
 ] + [
     ParserInstruction(ins_name, unit.Operand.ADDRESS, unit.Operand.CONSTANT,
@@ -360,6 +386,7 @@ INSTRUCTIONS = [
         ("SHRC", ALU.SHR),
         ("ANDC", ALU.AND),
         ("ORC", ALU.OR),
+        ("XORC", ALU.XOR),
     ]
 ]
 

@@ -35,19 +35,16 @@ class AsmParserTest(TestCase):
 
     def test_asm_parser_binary(self):
         asm = program_parser.AsmParser()
-        for line in PROGRAM:
-            asm.parse_line(line)
+        asm.parse_lines(PROGRAM)
         output = asm.get_str(resolved=True, rom_binary=True)
 
     def test_asm_parser_unresolved(self):
         asm = program_parser.AsmParser()
-        for line in PROGRAM:
-            asm.parse_line(line)
+        asm.parse_lines(PROGRAM)
         output = asm.get_str(resolved=False, rom_binary=False)
 
     def test_asm_parser_resolved(self):
         asm = program_parser.AsmParser()
-        for line in PROGRAM:
-            asm.parse_line(line)
+        asm.parse_lines(PROGRAM)
         output = asm.get_str(resolved=True, rom_binary=False)
 

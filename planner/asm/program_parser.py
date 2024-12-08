@@ -59,15 +59,16 @@ class AsmParser:
         if not rom_binary:
             _content.append(f"{util.PROGRAM_ORG} equ {self.lm.labels[util.PROGRAM_ORG].get()}")
         for add, x in self.final_bytes:
+            resolved_instruction_with_address = f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}"
             if not rom_binary:
-                _content.append(f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}")
+                _content.append(resolved_instruction_with_address)
             else:
                 if track_binary_address is None:
                     track_binary_address = add # first address can be util.PROGRAM_ORG
                 assert track_binary_address == add, "gaps found in binary representation"
                 out = f"{x.get_str(resolved=resolved, binary=True)}"
                 _content.append(out)
-                assert len(out) % 8 == 0
+                assert len(out) % 8 == 0, f"failed at {resolved_instruction_with_address}"
                 track_binary_address += len(out)//8
 
         content = '\n'.join(_content)
@@ -212,3 +213,12 @@ class AsmParser:
             self.parse_bss(tokens)
         else:
             raise Exception(f"unknown section: {self.get_section()}")
+
+    def parse_lines(self, lines: List[str]):
+        line_no = 1
+        for line in lines:
+            try:
+                self.parse_line(line)
+            except ValueError as e:
+                raise ValueError(f"Parse failed at {line_no}: {e}\n {line}")
+            line_no += 1

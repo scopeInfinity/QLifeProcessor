@@ -34,6 +34,8 @@ class InstructionTest(TestCase):
             ("andc R9, 50",   "ANDC [36], 50"),
             ("or  R0, [65]",  "OR  [0], [65]"),
             ("orc R0, 65",    "ORC [0], 65"),
+            ("xor  R1, [44]",  "XOR  [4], [44]"),
+            ("xorc R1, 46",    "XORC [4],  46"),
         ]
 
         instructions = set()

@@ -53,7 +53,7 @@ class BinRunner:
             else:
                 ans.append(self.ram[addr+i])
 
-        logging.info("RAM[%04x] => %s", addr, ans)
+        logging.debug("RAM[%04x] => %s", addr, ans)
         return ans
 
     def write_ram(self, addr: int, count: int, value: int) -> List[int]:
@@ -66,7 +66,7 @@ class BinRunner:
         for i in range(count):
             self.ram[(i+addr)%len(self.ram)] = arr_value[i]
 
-        logging.info("RAM[%04x] <= %s", addr, arr_value)
+        logging.debug("RAM[%04x] <= %s", addr, arr_value)
 
     def m_fetch_and_store_stage1(
         self,
@@ -129,25 +129,7 @@ class BinRunner:
     def m_alu(self, rw: int, r: int, op: instruction.ALU):
         assert rw>=0 and rw<(1<<32)
         assert r>=0 and r<(1<<32)
-        MASK = ((1<<32)-1)
-        if op == instruction.ALU.ADD:
-            return MASK&(rw+r)
-        if op == instruction.ALU.SUB:
-            # TODO: deal with negative number
-            return MASK&(rw-r)
-        if op == instruction.ALU.SHL:
-            return MASK&(rw<<r)
-        if op == instruction.ALU.SHR:
-            return MASK&(rw>>r)
-        if op == instruction.ALU.PASS_R:
-            return MASK&(r)
-        if op == instruction.ALU.PASS_RW:
-            return MASK&(rw)
-        if op == instruction.ALU.AND:
-            return MASK&(rw&r)
-        if op == instruction.ALU.OR:
-            return MASK&(rw|r)
-        raise Exception(f"unsupported ALU op: {op}")
+        return instruction.ALU.execute(op, rw, r)
 
     @staticmethod
     def m_pc_next(pc: int, value: int, flag_alu_zero: bool, update_program_counter: bool, is_powered_on: bool):
@@ -161,11 +143,11 @@ class BinRunner:
     def step(self):
         self.pc = self.pc_next
         self.pc_next = self.pc + 4
-        logging.info("PC: 0x%x, flags: %s", self.pc, self.flags)
+        logging.debug("PC: 0x%x, flags: %s", self.pc, self.flags)
         ins_binary = self.read_ram(self.pc, 4)
         ins = instruction.FullyEncodedInstruction.from_binary(ins_binary)
-        logging.info("Instruction data: %s", ins)
-        logging.info("Instruction encoding: %s",
+        logging.debug("Instruction data: %s", ins)
+        logging.debug("Instruction encoding: %s",
             [str(x) for x in instruction.get_parsers_from_encoding(ins.encoded_instruction)])
         mblock_s1 = ins.encoded_instruction.mblock_s1
         mblock_s2 = ins.encoded_instruction.mblock_s2

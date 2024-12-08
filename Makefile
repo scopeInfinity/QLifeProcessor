@@ -2,10 +2,13 @@ SRC_DIR=.
 BUILD_DIR=build
 OUTPUT_DIR=output
 
-.PHONY: clean test
+.PHONY: clean test all
+
+all: $(patsubst programs/%.asm, $(OUTPUT_DIR)/programs/%.bin, $(shell find programs/ -name '*.asm'))
 
 clean:
 	rm -r $(BUILD_DIR)
+	rm -r (OUTPUT_DIR)
 
 include emulator/Makefile.mk
 
@@ -18,5 +21,3 @@ $(OUTPUT_DIR)/programs/%.bin: programs/%.asm
 	mkdir -p $(dir $@)
 	python3 -m planner asm -b $^ > $@
 
-
-all: $(patsubst programs/%.asm, $(OUTPUT_DIR)/programs/%.bin, $(shell find programs/ -name '*.asm'))

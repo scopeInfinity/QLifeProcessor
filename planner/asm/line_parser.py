@@ -9,6 +9,7 @@ def address_of(op: unit.Operand):
     raise AssertionError("can't take address of %s" % op)
 
 def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Operand, unit.LazyLabel]]]]:
+    orginal_line = line
     try:
         comment_index = line.index("#")
         line = line[:comment_index]
@@ -30,7 +31,7 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
     for op in operands:
         op = op.strip()
         if len(op) == 0:
-            raise ValueError("no-length operand found in %s" % line)
+            raise ValueError("no-length operand found in '%s'" % orginal_line)
         optype = unit.Operand.CONSTANT
         if op.startswith("[") and op.endswith("]"):
             optype = address_of(optype)
@@ -41,12 +42,15 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
 
         if op.startswith("R"):
             if len(op) != 2 or op[1] not in "0123456789":
-                raise ValueError("Invalid mem-register {op} provided, only R0..R9 supported.")
+                raise ValueError(f"Invalid mem-register {op} provided, only R0..R9 supported.")
             optype = address_of(optype)
             op = str(int(op[1:])*4)
 
         try:
-            value = unit.LazyLabel(util.LABEL_CONSTANT, int(op, 0))  # automatically understand base-10 and base-16
+            int_val = int(op, 0)
+            assert int_val < (1<<8), "only 1-bit value is supported"
+            assert int_val >= 0, "negative value in ASM is not yet supported"
+            value = unit.LazyLabel(util.LABEL_CONSTANT, int_val)  # automatically understand base-10 and base-16
         except ValueError as e:
             if util.is_valid_label(op):
                 value = unit.LazyLabel(op)
