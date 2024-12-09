@@ -51,21 +51,21 @@ class MBlockSelector_stage2(Enum):
     '''
     bits: [read_ram(vrw_source) else read_ram(vr_value)]
     '''
-    VRW_SOURCE_RAM = 0
-    VR_VALUE_RAM = 1
+    VRW_SOURCE_CONST = 0
+    VRW_SOURCE_RAM = 1
+    VR_VALUE_RAM = 2
     # last one for reverse lookup
     DONT_CARE = 0
 
     @classmethod
     def wire(cls, sel) -> List:
         assert isinstance(sel, cls)
-        return [sel.value%2]
+        return [sel.value%2, sel.value>>1]
 
     @classmethod
     def from_binary(cls, bin: List[int]):
-        assert len(bin) == 1
-        val = bin[0]
-        assert val >= 0 and val < 2
+        assert len(bin) == 2
+        val = bin[0]+bin[1]*2
         return cls(val)
 
 class MBlockSelector_stage3(Enum):
@@ -99,6 +99,9 @@ class ALU(Enum):
     AND = 6
     OR = 7
     XOR = 8
+    # vr_value<<8 | vrw_value
+    # Pretty specific operation for passing 16-bit long operand value
+    R_SHL8_RW_OR = 9
 
     @staticmethod
     def wire(sel) -> List:
@@ -133,13 +136,15 @@ class ALU(Enum):
             return MASK&(rw|r)
         if op == ALU.XOR:
             return MASK&(rw^r)
+        if op == ALU.R_SHL8_RW_OR:
+            return MASK&(rw|(r<<8))
         raise Exception(f"unsupported ALU op: {op}")
 
 MAPPING = {
     "alu_op"    : [0, 1, 2, 3],
     "mblock_s1" : [4, 5],
-    "mblock_s2" : [6],
-    "mblock_s3" : [7, 8, 9],
+    "mblock_s2" : [6, 7],
+    "mblock_s3" : [8, 9, 10],
 }
 
 class EncodedInstruction:
@@ -242,20 +247,22 @@ class ParserInstruction:
         self.type_rw = type_rw
         self.type_r = type_r
         self.encoded_instruction = encoded_instruction
+        self.is_value_16bit = (encoded_instruction.alu_op == ALU.R_SHL8_RW_OR)
+        if self.is_value_16bit:
+            assert self.type_rw == self.type_r
 
-    def expects_operands(self):
-        expects = []
-        if self.type_rw != unit.Operand.IGNORE:
-            expects.append(self.type_rw)
-        if self.type_r != unit.Operand.IGNORE:
-            expects.append(self.type_r)
+    def expect_asm_operands(self):
+        if self.is_value_16bit:
+            expects = [self.type_r]
+        else:
+            expects = [self.type_rw, self.type_r]
         return expects
 
     def parse(self, values: List[Tuple[unit.Operand, int]]):
         return ParsedInstruction(self, values)
 
     def __str__(self) -> str:
-        expects = ', '.join([str(x) for x in self.expects_operands()])
+        expects = ', '.join([str(x) for x in self.expect_asm_operands()])
         return "%s %s" % (self.name, expects)
 
 
@@ -266,20 +273,16 @@ class ParsedInstruction:
         self.fully_encoded_instruction = self.get_fully_encoded_instruction(values)
 
     def get_fully_encoded_instruction(self, values: List[Tuple[unit.Operand, unit.LazyLabel]]):
-        if self.parser.expects_operands() != [t[0] for t in values]:
-            raise ValueError(f"{self.parser.name} want operand type {self.parser.expects_operands()}, given operand values {values}")
-        values_index = 0
-        if self.parser.type_rw != unit.Operand.IGNORE:
-            address_rw = values[values_index][1]
-            values_index+=1
+        if self.parser.expect_asm_operands() != [t[0] for t in values]:
+            raise ValueError(f"{self.parser.name} want operand type {self.parser.expect_asm_operands()}, given operand values {values}")
+        if self.parser.is_value_16bit:
+            assert len(values) == 1
+            address_rw = values[0][1].bin_and(0xFF)
+            address_r = values[0][1].shr(8)
         else:
-            address_rw = unit.LazyLabel(util.LABEL_CONSTANT, 0)
-        if self.parser.type_r != unit.Operand.IGNORE:
-            address_r = values[values_index][1]
-            values_index+=1
-        else:
-            address_r = unit.LazyLabel(util.LABEL_CONSTANT, 0)
-        assert len(values) == values_index
+            assert len(values) == 2
+            address_rw = values[0][1]
+            address_r = values[1][1]
         return self.parser.encoded_instruction.plug(address_rw, address_r)
 
     def get_str(self, resolved=False, binary=False):
@@ -347,17 +350,17 @@ INSTRUCTIONS = [
                                          MBlockSelector_stage2.VRW_SOURCE_RAM,
                                          MBlockSelector_stage3.NO_WRITE,
                                          ALU.SUB)),
-    ParserInstruction("JMP", unit.Operand.IGNORE, unit.Operand.CONSTANT,
+    ParserInstruction("JMP", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
-                                         MBlockSelector_stage2.DONT_CARE,
+                                         MBlockSelector_stage2.VRW_SOURCE_CONST,
                                          MBlockSelector_stage3.PC_NEXT,
-                                         ALU.PASS_R)),
+                                         ALU.R_SHL8_RW_OR)),
     # TODO: Ensure flag_alu_zero is updated after stage3.
-    ParserInstruction("JZ", unit.Operand.IGNORE, unit.Operand.CONSTANT,
+    ParserInstruction("JZ", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
-                                         MBlockSelector_stage2.DONT_CARE,
+                                         MBlockSelector_stage2.VRW_SOURCE_CONST,
                                          MBlockSelector_stage3.PC_NEXT_IF_ZERO,
-                                         ALU.PASS_R))
+                                         ALU.R_SHL8_RW_OR))
 ] + [
     ParserInstruction(ins_name, unit.Operand.ADDRESS, unit.Operand.ADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,

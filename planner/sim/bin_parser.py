@@ -96,6 +96,8 @@ class BinRunner:
             return binary_array_num(self.read_ram(vr_value, 4))  # reading from 32-bit address
         if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_RAM:
             return binary_array_num(self.read_ram(vrw_source, 4))  # reading from 8-bit address
+        if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_CONST:
+            return vrw_source
         raise Exception(f"unsupported selector: {sel}")
 
     def m_fetch_and_store_stage3(
@@ -130,15 +132,6 @@ class BinRunner:
         assert rw>=0 and rw<(1<<32)
         assert r>=0 and r<(1<<32)
         return instruction.ALU.execute(op, rw, r)
-
-    @staticmethod
-    def m_pc_next(pc: int, value: int, flag_alu_zero: bool, update_program_counter: bool, is_powered_on: bool):
-        if not is_powered_on:
-            return PROGRAM_ORG
-        if update_program_counter:
-            return value
-        # TODO: handle JEQ
-        return pc+4
 
     def step(self):
         self.pc = self.pc_next

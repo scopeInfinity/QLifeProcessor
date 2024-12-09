@@ -48,8 +48,6 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
 
         try:
             int_val = int(op, 0)
-            assert int_val < (1<<8), "only 1-bit value is supported"
-            assert int_val >= 0, "negative value in ASM is not yet supported"
             value = unit.LazyLabel(util.LABEL_CONSTANT, int_val)  # automatically understand base-10 and base-16
         except ValueError as e:
             if util.is_valid_label(op):

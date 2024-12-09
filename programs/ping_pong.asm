@@ -34,6 +34,15 @@ OUTPUT_HEGHT equ 7
 INPUT_DEVICE equ 1
 
 section .text
+  jmp main
+
+section .data
+    bat1_y    dd 2
+    bat2_y    dd 2
+    ball_x    dd 7
+    ball_y    dd 2
+
+section .text
   main:
 
   game:
@@ -101,8 +110,8 @@ section .text
     OUT OUTPUT_WIDTH, R0
     OUT OUTPUT_HEGHT, R1
 
-    # jmp sleep2
-    # sleep_end2:
+    jmp sleep2
+    sleep_end2:
     ## Player 2
     # anode col
     movc R0, 0xFF
@@ -125,19 +134,13 @@ section .text
    jmp _sleep
 
 
-  #sleep2:
-  # movc R0, 0xF0
-  # shlc R0, 2
-  # _sleep2:
-  # subc R0, 1
-  # jz sleep_end2
-  # jmp _sleep2
-
-section .data
-    bat1_y    dd 2
-    bat2_y    dd 2
-    ball_x    dd 7
-    ball_y    dd 2
+  sleep2:
+  movc R0, 0xF0
+  shlc R0, 2
+  _sleep2:
+  subc R0, 1
+  jz sleep_end2
+  jmp _sleep2
 
 section .text
   step:

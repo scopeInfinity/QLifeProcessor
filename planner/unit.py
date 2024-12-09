@@ -5,12 +5,13 @@ import logging
 
 
 class LazyLabel:
-    def __init__(self, name: str, value: Optional[int] = None):
+    def __init__(self, name: str, value: Optional[int] = None, override_get = None):
         assert util.is_valid_label(name), ValueError(f"{name} is not a valid label")
         self.name = name
         if name == util.LABEL_CONSTANT:
             assert value is not None
         self.value = value
+        self.override_get = override_get
 
     def __repr__(self):
         if self.name == util.LABEL_CONSTANT:
@@ -26,7 +27,19 @@ class LazyLabel:
             return self.name == o.name
         return False
 
+    def shr(self, shift):
+        def new_get(ensure_resolved=False):
+            return self.get(ensure_resolved)>>shift
+        return LazyLabel(util.LABEL_TMP, override_get=new_get)
+
+    def bin_and(self, val):
+        def new_get(ensure_resolved=False):
+            return self.get(ensure_resolved)&val
+        return LazyLabel(util.LABEL_TMP, override_get=new_get)
+
     def get(self, ensure_resolved=False):
+        if self.override_get is not None:
+            return self.override_get(ensure_resolved=ensure_resolved)
         if self.value is None:
             assert not ensure_resolved
             logging.info("LazyLabel[%s] is empty", self.name)
@@ -35,13 +48,7 @@ class LazyLabel:
 
     def assign(self, o):
         if not isinstance(o.value, int):
-            raise ValueError(f"{name} resolution failed during assign as {o.value}")
-
-        if 0 > o.value:
-            raise ValueError("only >=0 label values are supported, got: {o.value}")
-        if o.value >= (1<<8):
-            raise ValueError(f"only 1-bit label values are supported, got: {o.value}")
-
+            raise ValueError(f"{self.name} resolution failed during assign as {o.value}")
         if self.value is None:
             self.value = o.value
         else:
@@ -59,17 +66,19 @@ class LazyLabel:
 class Operand(Enum):
     ADDRESS = 1
     CONSTANT = 2
-    IGNORE = 3
     # Address of address, equivalent of pointers
-    DADDRESS = 4
+    DADDRESS = 3
 
     def __repr__(self):
         return self.name
 
 
 class Data:
-    def __init__(self, byte: Optional[int]):
+    def __init__(self, byte: Optional[int] = None):
         self.byte=byte
+        if self.byte is not None:
+            if self.byte >= 256:
+                raise ValueError(f"data is more than a byte: {byte}")
 
     def size(self):
         return 1

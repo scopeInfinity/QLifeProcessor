@@ -127,6 +127,9 @@ class LEDDisplay(Device):
         self.anodes = [IntegerOutput("anode", bits=self.width)]
         self.cathodes = [IntegerOutput("cathode", bits=self.height)]
         self.led_brightness_threshold = 0.1
+        # led should be on for 0.02 secs to stay on
+        self.led_brightness_recompute_lag = 0.01 # secs
+        # led will stay on for 0.1 secs
         self.led_brightness_reduce_per_step = 0.1
         for _ in range(self.height):
             self.leds.append([0]*self.width)
@@ -151,7 +154,7 @@ class LEDDisplay(Device):
         while True:
             self.recompute_brightness_step()
             self.display(only_if_changed=True)
-            time.sleep(0.01)
+            time.sleep(self.led_brightness_recompute_lag)
 
     def get_anodes(self):
         return self.anodes
