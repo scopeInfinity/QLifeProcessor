@@ -54,28 +54,35 @@ class MBlockSelector_stage2(Enum):
     VRW_SOURCE_CONST = 0
     VRW_SOURCE_RAM = 1
     VR_VALUE_RAM = 2
+    # vr_source<<8 | vrw_source
+    # Pretty specific operation for passing 16-bit constant or address
+    VR_SOURCE_SHL8_VRW_SOURCE_RAM = 3
+    VR_SOURCE_SHL8_VRW_SOURCE_CONST = 4
+    PC = 5
+
     # last one for reverse lookup
     DONT_CARE = 0
 
     @classmethod
     def wire(cls, sel) -> List:
         assert isinstance(sel, cls)
-        return [sel.value%2, sel.value>>1]
+        return [sel.value%2, (sel.value>>1)%2, sel.value>>2]
 
     @classmethod
     def from_binary(cls, bin: List[int]):
-        assert len(bin) == 2
-        val = bin[0]+bin[1]*2
+        assert len(bin) == 3
+        val = bin[0]+bin[1]*2+bin[2]*4
         return cls(val)
 
 class MBlockSelector_stage3(Enum):
-    NO_WRITE           = 0
-    VRW_SOURCE_RAM     = 1
-    VRW_SOURCE_IO      = 2
-    VRW_VALUE_RAM      = 3
-    PC_NEXT            = 4
-    PC_NEXT_IF_ZERO    = 5
-    HLT                = 6
+    NO_WRITE            = 0
+    VRW_SOURCE_RAM      = 1
+    VRW_SOURCE_IO       = 2
+    VRW_VALUE_RAM       = 3
+    PC_NEXT             = 4
+    PC_NEXT_IF_ZERO     = 5
+    PC_NEXT_IF_NOT_ZERO = 6
+    HLT                 = 7
 
     @classmethod
     def wire(cls, sel) -> List:
@@ -144,8 +151,8 @@ class ALU(Enum):
 MAPPING = {
     "alu_op"    : [0, 1, 2, 3],
     "mblock_s1" : [4, 5],
-    "mblock_s2" : [6, 7],
-    "mblock_s3" : [8, 9, 10],
+    "mblock_s2" : [6, 7, 8],
+    "mblock_s3" : [9, 10, 11],
 }
 
 class EncodedInstruction:
@@ -331,6 +338,11 @@ INSTRUCTIONS = [
                                          MBlockSelector_stage2.DONT_CARE,
                                          MBlockSelector_stage3.VRW_SOURCE_RAM,
                                          ALU.PASS_R)),
+    ParserInstruction("PCPLUS", unit.Operand.ADDRESS, unit.Operand.CONSTANT,
+                      EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
+                                         MBlockSelector_stage2.PC,
+                                         MBlockSelector_stage3.VRW_SOURCE_RAM,
+                                         ALU.ADD)),
     ParserInstruction("LOAD", unit.Operand.ADDRESS, unit.Operand.DADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
                                          MBlockSelector_stage2.VR_VALUE_RAM,
@@ -338,6 +350,11 @@ INSTRUCTIONS = [
                                          ALU.PASS_RW)),
     ParserInstruction("STORE", unit.Operand.DADDRESS, unit.Operand.ADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
+                                         MBlockSelector_stage2.VRW_SOURCE_RAM,
+                                         MBlockSelector_stage3.VRW_VALUE_RAM,
+                                         ALU.PASS_R)),
+    ParserInstruction("STOREC", unit.Operand.DADDRESS, unit.Operand.CONSTANT,
+                      EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
                                          MBlockSelector_stage2.VRW_SOURCE_RAM,
                                          MBlockSelector_stage3.VRW_VALUE_RAM,
                                          ALU.PASS_R)),
@@ -358,15 +375,24 @@ INSTRUCTIONS = [
                                          ALU.PASS_R)),
     ParserInstruction("JMP", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
-                                         MBlockSelector_stage2.VRW_SOURCE_CONST,
+                                         MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_CONST,
                                          MBlockSelector_stage3.PC_NEXT,
-                                         ALU.R_SHL8_RW_OR)),
-    # TODO: Ensure flag_alu_zero is updated after stage3.
+                                         ALU.PASS_RW)),
+    ParserInstruction("JMPM", unit.Operand.ADDRESS, unit.Operand.ADDRESS,
+                      EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
+                                         MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_RAM,
+                                         MBlockSelector_stage3.PC_NEXT,
+                                         ALU.PASS_RW)),
     ParserInstruction("JZ", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
-                                         MBlockSelector_stage2.VRW_SOURCE_CONST,
+                                         MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_CONST,
                                          MBlockSelector_stage3.PC_NEXT_IF_ZERO,
-                                         ALU.R_SHL8_RW_OR)),
+                                         ALU.PASS_RW)),
+    ParserInstruction("JNZ", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
+                      EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
+                                         MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_CONST,
+                                         MBlockSelector_stage3.PC_NEXT_IF_NOT_ZERO,
+                                         ALU.PASS_RW)),
 ] + [
     ParserInstruction(ins_name, unit.Operand.ADDRESS, unit.Operand.ADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
@@ -415,13 +441,37 @@ def get_parsers_from_encoding(ins: EncodedInstruction) -> ParserInstruction:
     return ans
 
 
-def parse(name: str, tokens: List[Tuple[unit.Operand, int]]):
+def parse(name: str, tokens: List[Tuple[unit.Operand, unit.LazyLabel]]):
     # preprocess
     if name.upper() == "HLT":
         return [get_parser(name).parse([
             (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 0)),
             (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 0))
             ] + tokens)]
+
+    if name.upper() == "JMP":
+        assert len(tokens) == 1
+        assert tokens[0][0] == unit.Operand.CONSTANT
+        return [get_parser(name).parse([
+            (unit.Operand.CONSTANT, tokens[0][1].bin_and(0xFF)),
+            (unit.Operand.CONSTANT, tokens[0][1].shr(8))
+            ])]
+
+    if name.upper() == "JMPM":
+        assert len(tokens) == 1
+        assert tokens[0][0] == unit.Operand.ADDRESS
+        return [get_parser(name).parse([
+            (unit.Operand.ADDRESS, tokens[0][1].bin_and(0xFF)),
+            (unit.Operand.ADDRESS, tokens[0][1].shr(8))
+            ])]
+
+    if name.upper() == "JZ" or name.upper() == "JNZ":
+        assert len(tokens) == 1
+        assert tokens[0][0] == unit.Operand.CONSTANT
+        return [get_parser(name).parse([
+            (unit.Operand.CONSTANT, tokens[0][1].bin_and(0xFF)),
+            (unit.Operand.CONSTANT, tokens[0][1].shr(8))
+            ])]
 
     # multi-step instructions
     if name == "PUSH":
@@ -441,6 +491,40 @@ def parse(name: str, tokens: List[Tuple[unit.Operand, int]]):
             get_parser("ADDC").parse([
                 (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
                 (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 4))])
+            ]
+    elif name == "CALL":
+        assert len(tokens) == 1, "call _jmp_address_"
+        assert tokens[0][0] == unit.Operand.CONSTANT
+        return [
+            get_parser("PCPLUS").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.MSI)),
+                (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 16))]),
+            get_parser("SUBC").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 4))]),
+            get_parser("STORE").parse([
+                (unit.Operand.DADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.MSI))
+                ]),
+            get_parser("JMP").parse([
+                (unit.Operand.CONSTANT, tokens[0][1].bin_and(0xFF)),
+                (unit.Operand.CONSTANT, tokens[0][1].shr(8))
+                ])
+            ]
+    elif name == "RET":
+        assert len(tokens) == 0
+        return [
+            get_parser("LOAD").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.MSI)),
+                (unit.Operand.DADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                ]),
+            get_parser("ADDC").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 4))]),
+            get_parser("JMPM").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.MSI)),
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, 0))
+                ])
             ]
 
     return [get_parser(name).parse(tokens)]

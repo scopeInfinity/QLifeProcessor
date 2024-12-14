@@ -31,7 +31,7 @@ def args_parser():
 def main():
     args = args_parser().parse_args()
     if args.verbose:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.DEBUG)
     if args.source == "asm":
         asm = program_parser.AsmParser()
         with open(args.asm_file, "r") as f:

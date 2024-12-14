@@ -13,14 +13,17 @@ class InstructionTest(TestCase):
             ("movc R4, 0x2", "MOVC [16], 2"),
             ("cmp R2, [33]", "CMP [8], [33]"),
             ("cmpc R6, 35", "CMPC [24], 35"),
-            ("jmp 0x55", "JMP 85"),
-            ("jz 0x22", "JZ 34"),
+            ("jmp 0x55, 0", "JMP 85, 0"),
+            ("jmpm [0x55], [0]", "JMPM [85], [0]"),
+            ("jz 0x22, 0", "JZ 34, 0"),
+            ("jnz 0x22, 0", "JNZ 34, 0"),
 
 
             ("load R3, [R1]", "LOAD [12], [[4]]"),
             ("load R4, [[50]]", "LOAD [16], [[50]]"),
             ("store [R1], R3", "STORE [[4]], [12]"),
             ("store [[50]], R4", "STORE [[50]], [16]"),
+            ("storec [[50]], 10", "STOREC [[50]], 10"),
 
             ("add  R0, [10]", "ADD  [0], [10]"),
             ("addc R1, 10",   "ADDC [4], 10"),
@@ -37,6 +40,7 @@ class InstructionTest(TestCase):
             ("xor  R1, [44]",  "XOR  [4], [44]"),
             ("xorc R1, 46",    "XORC [4],  46"),
 
+            ("pcplus R0, 4",    "PCPLUS [0], 4"),
             ("hlt 0, 0",    "HLT 0, 0"),
         ]
 

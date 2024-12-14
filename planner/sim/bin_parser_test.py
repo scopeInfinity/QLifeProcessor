@@ -145,16 +145,22 @@ class BinParserTest(TestCase):
                 jmp bad
 
             good1:
-                movc R1, 10
-                cmp R0, R1 # incorrect
-                jz bad
                 movc R1, 45
                 cmp R0, R1 # correct
-                jz good2
+                jnz bad
+                movc R1, 10
+                cmp R0, R1 # incorrect
+                jnz good2
                 jmp bad
 
             good2:
-                jmp all_good
+                jmp good3
+                hlt
+
+            good3:
+                movc R1, all_good
+                jmpm R1
+
             bad:
                 hlt
             all_good:
@@ -165,7 +171,6 @@ class BinParserTest(TestCase):
 
 
     def test_data_section(self):
-        self.fake_input.set_input(10)
         self.execute(f"""
             PROGRAM_ORG equ 0x40
             section .text
@@ -186,9 +191,7 @@ class BinParserTest(TestCase):
         """)
         self.assertEqual(self.fake_ouput.get(), 96)
 
-
     def test_bss_section(self):
-        self.fake_input.set_input(10)
         self.execute(f"""
             PROGRAM_ORG equ 0x40
             section .text
@@ -204,3 +207,57 @@ class BinParserTest(TestCase):
                 array_end:
         """)
         self.assertEqual(self.fake_ouput.get(), 10)
+
+    def test_load_store(self):
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                movc [array_ptr], array_0
+                load R0, [[array_ptr]]
+                addc [array_ptr], 4
+
+                store [[array_ptr]], R0
+                mov R1, [array_1]
+                storec [[array_ptr]], 10
+                add R1, [array_1]
+
+                out {self.FAKE_OUPUT_AT}, R1
+                hlt
+
+            section .data
+                array_0 dd 15
+            section .bss
+                array_1: resb 4
+                array_ptr: resb 4
+                array_end:
+        """)
+        self.assertEqual(self.fake_ouput.get(), 25)
+
+    def test_call(self):
+        self.fake_input.set_input(45)
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+
+            section .text
+            main:
+                movc ESP, 0xFC
+                movc R1, 10
+                movc R2, 15
+                call sum
+                jmp end
+                hlt  # guard bad marker
+
+            sum:
+                push R1
+                add R1, R2
+                mov R0, R1
+                pop R1
+                ret
+                hlt  # guard bad marker
+
+            end:
+                out {self.FAKE_OUPUT_AT}, R0
+                hlt
+        """)
+        self.assertEqual(self.fake_ouput.get(), 25)

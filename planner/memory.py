@@ -9,7 +9,7 @@ def get_register_address(index):
 # Stack Registers
 TOKEN_ESP = "ESP"
 ESP = 0x20
-ESB = 0x24
+MSI = 0x24  # multi-step instruction state
 
 # free
 

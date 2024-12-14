@@ -5,8 +5,6 @@ from typing import List, Optional
 from planner import instruction, memory
 from planner.sim import devices
 
-logging.basicConfig(level=logging.INFO)
-
 PROGRAM_ORG = memory.DEFAULT_PROGRAM_ORG
 IO_DEVICES = 16
 
@@ -43,10 +41,10 @@ class BinRunner:
         content = content.replace(" ", "").replace("\n", "")
         assert len(content)%8 == 0
         assert set(content) <= set(['0', '1'])
-        program_size = int(content[:8], 2)
-        assert program_size*8+8 == len(content)
+        program_size = int(content[:32], 2)
+        assert program_size*8+32 == len(content)
         address = PROGRAM_ORG
-        for i in range(1, len(content)//8):
+        for i in range(4, len(content)//8):
             self.ram[address] = (int(content[i*8:(i+1)*8], 2))
             address += 1
 
@@ -94,9 +92,11 @@ class BinRunner:
 
     def m_fetch_and_store_stage2(
         self,
+        vr_source: int,
         vr_value: int,
         vrw_source: int,
         sel: instruction.MBlockSelector_stage2):
+        assert vr_source >= 0 and vr_source < 256
         assert vrw_source >= 0 and vrw_source < 256
         if sel == instruction.MBlockSelector_stage2.VR_VALUE_RAM:
             return binary_array_num(self.read_ram(vr_value, 4))  # reading from 32-bit address
@@ -104,6 +104,12 @@ class BinRunner:
             return binary_array_num(self.read_ram(vrw_source, 4))  # reading from 8-bit address
         if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_CONST:
             return vrw_source
+        if sel == instruction.MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_RAM:
+            return binary_array_num(self.read_ram((vr_source<<8) | vrw_source, 4))  # reading from 16-bit address
+        if sel == instruction.MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_CONST:
+            return (vr_source<<8) | vrw_source
+        if sel == instruction.MBlockSelector_stage2.PC:
+            return self.pc
         raise Exception(f"unsupported selector: {sel}")
 
     def m_fetch_and_store_stage3(
@@ -130,6 +136,11 @@ class BinRunner:
         if sel == instruction.MBlockSelector_stage3.PC_NEXT_IF_ZERO:
             # check previous vw_value flags
             if self.flags[FLAGS_BIT_VW_ZERO] == 1:
+                self.pc_next = vw_value
+            return
+        if sel == instruction.MBlockSelector_stage3.PC_NEXT_IF_NOT_ZERO:
+            # check previous vw_value flags
+            if self.flags[FLAGS_BIT_VW_ZERO] == 0:
                 self.pc_next = vw_value
             return
         if sel == instruction.MBlockSelector_stage3.HLT:
@@ -170,6 +181,7 @@ class BinRunner:
             vr_source,
             mblock_s1)
         vrw_value = self.m_fetch_and_store_stage2(
+            vr_source,
             vr_value,
             vrw_source,
             mblock_s2)

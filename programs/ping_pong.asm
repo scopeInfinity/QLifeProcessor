@@ -34,7 +34,11 @@ OUTPUT_HEGHT equ 7
 INPUT_DEVICE equ 1
 
 section .text
-  jmp main
+  main:
+    movc ESP, 0xFF
+    shlc ESP, 8
+    orc ESP, 0xF0
+    jmp game
 
 section .data
     bat1_y    dd 2
@@ -43,35 +47,19 @@ section .data
     ball_y    dd 2
 
 section .text
-  main:
-
   game:
-    # call print
-    jmp print
-    game_after_print:
-    jmp read_input_p1_up
-    game_after_read:
-    jmp sleep
-    sleep_end:
-    # only print, TODO: fix
+    call print
+    call read_input_p1_up
+    call sleep
     jmp game
 
 
     # call step
     # jmp step
     game_after_step:
-    jmp game
-    hlt_marker:
-    jmp hlt_marker
-
-  #wait_led_lit:
-    # wait for 100 ins to let LED powered up
-  #  mov [R0], 100
-  #  _wait_led_lit_internal:
-  #  sub [R0], 1
-  #  cmp [R0], 0
-  #  jneq _wait_led_lit_internal
-  #  ret
+    # jmp game
+    # hlt_marker:
+    # jmp hlt_marker
 
   read_input_p1_up:
     IN R0, INPUT_DEVICE
@@ -92,11 +80,10 @@ section .text
   read_input_p2_down:
     movc R1, 0x08
     and R1, R0
-    jz game_after_read
+    jz read_input_end
     addc [bat2_y], 1
-    jmp game_after_read
-
-
+  read_input_end:
+    ret
 
   print:
     ## Player 1
@@ -110,8 +97,7 @@ section .text
     OUT OUTPUT_WIDTH, R0
     OUT OUTPUT_HEGHT, R1
 
-    jmp sleep2
-    sleep_end2:
+    call sleep
     ## Player 2
     # anode col
     movc R0, 0xFF
@@ -122,30 +108,19 @@ section .text
     shl R1, [bat2_y]
     OUT OUTPUT_WIDTH, R0
     OUT OUTPUT_HEGHT, R1
-
-    jmp game_after_print
+    ret
 
   sleep:
-   movc R0, 0xF0
-   shlc R0, 2
-   _sleep:
-   subc R0, 1
-   jz sleep_end
-   jmp _sleep
+    movc R0, 0xF0
+    shlc R0, 1
+    _sleep:
+    subc R0, 1
+    jnz _sleep
+    ret
 
-
-  sleep2:
-  movc R0, 0xF0
-  shlc R0, 2
-  _sleep2:
-  subc R0, 1
-  jz sleep_end2
-  jmp _sleep2
-
-section .text
-  step:
-    addc [ball_x], 1
-    andc [ball_x], 0x07
-    jmp game_after_step
+  #step:
+  #  addc [ball_x], 1
+  #  andc [ball_x], 0x07
+  #  jmp game_after_step
 
 
