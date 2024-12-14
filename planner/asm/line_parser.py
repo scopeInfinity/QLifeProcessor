@@ -1,5 +1,5 @@
 from typing import List, Tuple, Optional
-from planner import unit, util
+from planner import unit, util, memory
 
 def address_of(op: unit.Operand):
     if op == unit.Operand.CONSTANT:
@@ -27,7 +27,11 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
 
     # Parsing operands
     line = line[first_space:].strip()
-    operands = line.split(",")
+    if len(line) == 0:
+        # no operand
+        operands = []
+    else:
+        operands = line.split(",")
     for op in operands:
         op = op.strip()
         if len(op) == 0:
@@ -40,12 +44,16 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
             optype = address_of(optype)
             op = op[1:-1].strip()
 
-        if op.startswith("R"):
-            if len(op) != 2 or op[1] not in "0123456789":
-                raise ValueError(f"Invalid mem-register {op} provided, only R0..R9 supported.")
+        if op.upper() == memory.TOKEN_ESP:
             optype = address_of(optype)
-            op = str(int(op[1:])*4)
-
+            op = str(memory.ESP)
+        elif op.startswith("R"):
+            optype = address_of(optype)
+            try:
+                rindex = int(op[1:])
+            except ValueError as e:
+                raise ValueError(f"Invalid mem-register {op} provided, only R0..R{memory.GENERAL_REGISTERS_COUNT} supported: {e}")
+            op = str(memory.get_register_address(rindex))
         try:
             int_val = int(op, 0)
             value = unit.LazyLabel(util.LABEL_CONSTANT, int_val)  # automatically understand base-10 and base-16

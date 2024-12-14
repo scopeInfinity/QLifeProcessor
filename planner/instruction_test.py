@@ -30,12 +30,14 @@ class InstructionTest(TestCase):
             ("shlc R5, 11",   "SHLC [20], 11"),
             ("shr  R6, [12]", "SHR  [24], [12]"),
             ("shrc R7, 12",   "SHRC [28], 12"),
-            ("and  R8, [50]", "AND  [32], [50]"),
-            ("andc R9, 50",   "ANDC [36], 50"),
+            ("and  R1, [50]", "AND  [4], [50]"),
+            ("andc R2, 50",   "ANDC [8], 50"),
             ("or  R0, [65]",  "OR  [0], [65]"),
             ("orc R0, 65",    "ORC [0], 65"),
             ("xor  R1, [44]",  "XOR  [4], [44]"),
             ("xorc R1, 46",    "XORC [4],  46"),
+
+            ("hlt 0, 0",    "HLT 0, 0"),
         ]
 
         instructions = set()
@@ -51,5 +53,18 @@ class InstructionTest(TestCase):
             len(instruction.INSTRUCTIONS),
             msg="Sample instructions not provided for all instructions")
 
+    def test_multi_instructions(self):
+        test_data = [
+            ("hlt", ["HLT 0, 0"]),
+            ("push R2", ["SUBC [32], 4", "STORE [[32]], [8]"]),
+            ("pop R2", ["LOAD [8], [[32]]", "ADDC [32], 4"]),
+        ]
 
+        for input_line, want in test_data:
+            name, tokens = line_parser.parse_line(input_line)
+            self.assertIsNotNone(name)
+            inss = instruction.parse(name, tokens)
+            self.assertEqual(
+                [' '.join(w.split()) for w in want],
+                [str(ins) for ins in inss])
 

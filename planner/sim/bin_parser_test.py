@@ -4,63 +4,203 @@ from planner.sim import devices
 from unittest import TestCase
 
 
-PROGRAM = """
-# Sample Program
-
-PROGRAM_ORG equ 0x40
-
-section .text
-main:
-    movc R1, 0
-
-    # add array0+array1 to R1
-    movc R2, array0
-    load  R3, [R2]
-    add R1, R3
-    addc R2, 4
-    load  R3, [R2]
-    add R1, R3
-
-    movc R2, 15
-    # input(0x05)*15
-    in   R4, 0x05
-loop_start:
-    cmpc R2, 0
-    jz loop_end
-    subc R2, 1
-    add  R1, R4
-    jmp loop_start
-loop_end:
-    # answer is in R1
-    movc R2, 12 # memory address of R3
-    store [R2], R1
-    out 0x06, R3
-loop_exit:
-    jmp loop_exit
-
-section .data
-array0 dd 31
-array1 dd 24
-
-
-""".splitlines()
-
 class BinParserTest(TestCase):
+    FAKE_INPUT_AT = 0x05
+    FAKE_OUPUT_AT = 0x06
 
-    def test_overall(self):
-        asm = program_parser.AsmParser()
-        for line in PROGRAM:
-            asm.parse_line(line)
-        binary_program = asm.get_str(resolved=True, rom_binary=True)
+    def setUp(self) -> None:
+        self.asm = program_parser.AsmParser()
+        self.fake_input = devices.LatchInput("fake", bits=32)
+        self.fake_ouput = devices.Device(bits=32)
+        self.bin = None
 
-        _bin = bin_parser.BinRunner(binary_program)
-        fake_input = devices.LatchInput("fake", bits=32)
-        fake_ouput = devices.Device(bits=32)
+    def execute(self, program: str):
+        self.asm.parse_lines(program.splitlines())
+        binary_program = self.asm.get_str(resolved=True, rom_binary=True)
 
-        _bin.set_input_device(5, fake_input)
-        _bin.set_output_device(6, fake_ouput)
+        self.bin = bin_parser.BinRunner(binary_program)
+        self.bin.set_input_device(self.FAKE_INPUT_AT, self.fake_input)
+        self.bin.set_output_device(self.FAKE_OUPUT_AT, self.fake_ouput)
+        self.bin.run_until_hlt()
 
-        fake_input.set_input(56)
-        for _ in range(100):
-            _bin.step()
-        self.assertEqual(fake_ouput.get(), 31+24+56*15)
+    def get_ram_byte(self, address: int):
+        return self.bin.read_ram(address, 1)[0]
+
+    def test_io(self):
+        self.fake_input.set_input(10)
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                in R0, {self.FAKE_INPUT_AT}
+                out {self.FAKE_OUPUT_AT}, R0
+                hlt
+        """)
+        self.assertEqual(self.fake_ouput.get(), 10)
+
+    def test_mov(self):
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                movc R0, 0x45
+                mov  R1, R0
+                out {self.FAKE_OUPUT_AT}, R1
+                hlt
+        """)
+        self.assertEqual(self.fake_ouput.get(), 0x45)
+
+
+    def test_simple_alu(self):
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                movc R0, 1
+                movc R1, 2
+                movc R2, 2
+                movc R3, 5
+                movc R4, 5
+                movc R5, 7
+                movc R6, 7
+                add R1, R0
+                sub R2, R0
+                shl R3, R0
+                shr R4, R0
+                or  R5, R0
+                xor R6, R0
+                hlt
+        """)
+        expect = [
+            (4, 3),
+            (8, 1),
+            (12, 10),
+            (16, 2),
+            (20, 7),
+            (24, 6)
+        ]
+
+        for address, value in expect:
+            self.assertEqual(self.get_ram_byte(address), value)
+
+    def test_simple_aluc(self):
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                movc R1, 9
+                movc R2, 9
+                movc R3, 9
+                movc R4, 9
+                movc R5, 9
+                movc R6, 9
+                addc R1, 10
+                subc R2, 5
+                shlc R3, 3
+                shrc R4, 2
+                orc  R5, 3
+                xorc R6, 3
+                hlt
+        """)
+        expect = [
+            (4, 19),
+            (8, 4),
+            (12, 72),
+            (16, 2),
+            (20, 11),
+            (24, 10)
+        ]
+
+        for address, value in expect:
+            self.assertEqual(self.get_ram_byte(address), value)
+
+    def test_stack(self):
+        self.fake_input.set_input(45)
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+
+            section .text
+            main:
+                movc ESP, 0xFC
+                in R0, {self.FAKE_INPUT_AT}
+                push R0
+                pop R1
+                out {self.FAKE_OUPUT_AT}, R1
+                hlt
+        """)
+        self.assertEqual(self.fake_ouput.get(), 45)
+
+    def test_jmp(self):
+        self.fake_input.set_input(45)
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+
+            section .text
+            main:
+                in R0, {self.FAKE_INPUT_AT}
+                cmpc R0, 10 # incorrect
+                jz bad
+                cmpc R0, 45 # correct
+                jz good1
+                jmp bad
+
+            good1:
+                movc R1, 10
+                cmp R0, R1 # incorrect
+                jz bad
+                movc R1, 45
+                cmp R0, R1 # correct
+                jz good2
+                jmp bad
+
+            good2:
+                jmp all_good
+            bad:
+                hlt
+            all_good:
+                out {self.FAKE_OUPUT_AT}, R0
+                hlt
+        """)
+        self.assertEqual(self.fake_ouput.get(), 45)
+
+
+    def test_data_section(self):
+        self.fake_input.set_input(10)
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                shlc [array_0], 2
+                mov R0, [array_0]
+                mov R1, [array_1]
+                mov R2, [array_2]
+                add R0, R1
+                add R0, R2
+                out {self.FAKE_OUPUT_AT}, R0
+                hlt
+
+            section .data
+                array_0 dd 11
+                array_1 dd 22
+                array_2 dd 30
+        """)
+        self.assertEqual(self.fake_ouput.get(), 96)
+
+
+    def test_bss_section(self):
+        self.fake_input.set_input(10)
+        self.execute(f"""
+            PROGRAM_ORG equ 0x40
+            section .text
+            main:
+                movc R0, array_end
+                subc R0, array_start
+                out {self.FAKE_OUPUT_AT}, R0
+                hlt
+
+            section .bss
+                array_start: resb 4
+                resb 6
+                array_end:
+        """)
+        self.assertEqual(self.fake_ouput.get(), 10)

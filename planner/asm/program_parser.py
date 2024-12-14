@@ -1,7 +1,7 @@
 import logging
 from typing import List, Union, Optional
 
-from planner import instruction, unit, util
+from planner import instruction, unit, util, memory
 
 from planner.asm import line_parser
 
@@ -52,19 +52,19 @@ class AsmParser:
             resolved = True  # implict
         if resolved:
             self.lm.propogate()
-        assert util.PROGRAM_ORG in self.lm.labels, f"{util.PROGRAM_ORG} label must be defined"
+        assert memory.LABEL_PROGRAM_ORG in self.lm.labels, f"{memory.LABEL_PROGRAM_ORG} label must be defined"
 
         track_binary_address = None
         _content = []
         if not rom_binary:
-            _content.append(f"{util.PROGRAM_ORG} equ {self.lm.labels[util.PROGRAM_ORG].get()}")
+            _content.append(f"{memory.LABEL_PROGRAM_ORG} equ {self.lm.labels[memory.LABEL_PROGRAM_ORG].get()}")
         for add, x in self.final_bytes:
             resolved_instruction_with_address = f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}"
             if not rom_binary:
                 _content.append(resolved_instruction_with_address)
             else:
                 if track_binary_address is None:
-                    track_binary_address = add # first address can be util.PROGRAM_ORG
+                    track_binary_address = add # first address can be memory.LABEL_PROGRAM_ORG
                 assert track_binary_address == add, "gaps found in binary representation"
                 out = f"{x.get_str(resolved=resolved, binary=True)}"
                 _content.append(out)
@@ -134,7 +134,8 @@ class AsmParser:
             return
         for _, token in tokens:
             self.lm.add_lazy(token)
-        self.add_ins(instruction.get_parser(ins_name).parse(tokens))
+        for ins in instruction.parse(ins_name, tokens):
+            self.add_ins(ins)
 
     def parse_data(self, tokens: List[str]):
         label = tokens[0]
@@ -164,23 +165,25 @@ class AsmParser:
                 self.add_data(unit.Data(byte))
 
     def parse_bss(self, tokens: List[str]):
-        if len(tokens) == 3:
-            assert tokens[0].endswith(":"), f"bss tokens: {tokens}"
+        nothing_happened = True
+        if len(tokens) >= 1 and tokens[0].endswith(":"):
             label = tokens[0][:-1]
             self.lm.new_label(label, self.get_address())
             tokens = tokens[1:]
-
-        assert tokens[0] == "resb"
-        sz = int(tokens[1])
-        for _ in range(sz):
-            self.add_data(unit.Data(None))
+            nothing_happened = False
+        if len(tokens) >= 1 and tokens[0] == "resb":
+            sz = int(tokens[1])
+            for _ in range(sz):
+                self.add_data(unit.Data(None))
+            nothing_happened = False
+        assert not nothing_happened
 
     def parse_constant(self, tokens: List[str]):
         assert tokens[1].lower() == "equ"
         self.lm.new_label(tokens[0], int(tokens[2], 0))
-        if tokens[0] == util.PROGRAM_ORG:
-            assert self.get_address() == 0, f"{util.PROGRAM_ORG} must be the first label defined"
-            self.add_address(self.lm.labels[util.PROGRAM_ORG].get())
+        if tokens[0] == memory.LABEL_PROGRAM_ORG:
+            assert self.get_address() == 0, f"{memory.LABEL_PROGRAM_ORG} must be the first label defined"
+            self.add_address(self.lm.labels[memory.LABEL_PROGRAM_ORG].get())
         return
 
     def parse_line(self, line: str):

@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Union, Tuple
 
-from planner import unit, util
+from planner import memory, unit, util
 
 '''
 # Stage 0
@@ -75,6 +75,7 @@ class MBlockSelector_stage3(Enum):
     VRW_VALUE_RAM      = 3
     PC_NEXT            = 4
     PC_NEXT_IF_ZERO    = 5
+    HLT                = 6
 
     @classmethod
     def wire(cls, sel) -> List:
@@ -350,6 +351,11 @@ INSTRUCTIONS = [
                                          MBlockSelector_stage2.VRW_SOURCE_RAM,
                                          MBlockSelector_stage3.NO_WRITE,
                                          ALU.SUB)),
+    ParserInstruction("HLT", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
+                      EncodedInstruction(MBlockSelector_stage1.DONT_CARE,
+                                         MBlockSelector_stage2.DONT_CARE,
+                                         MBlockSelector_stage3.HLT,
+                                         ALU.PASS_R)),
     ParserInstruction("JMP", unit.Operand.CONSTANT, unit.Operand.CONSTANT,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
                                          MBlockSelector_stage2.VRW_SOURCE_CONST,
@@ -360,7 +366,7 @@ INSTRUCTIONS = [
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_CONST,
                                          MBlockSelector_stage2.VRW_SOURCE_CONST,
                                          MBlockSelector_stage3.PC_NEXT_IF_ZERO,
-                                         ALU.R_SHL8_RW_OR))
+                                         ALU.R_SHL8_RW_OR)),
 ] + [
     ParserInstruction(ins_name, unit.Operand.ADDRESS, unit.Operand.ADDRESS,
                       EncodedInstruction(MBlockSelector_stage1.VR_SOURCE_RAM,
@@ -407,3 +413,34 @@ def get_parsers_from_encoding(ins: EncodedInstruction) -> ParserInstruction:
         if _ins.encoded_instruction == ins:
             ans.append(_ins)
     return ans
+
+
+def parse(name: str, tokens: List[Tuple[unit.Operand, int]]):
+    # preprocess
+    if name.upper() == "HLT":
+        return [get_parser(name).parse([
+            (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 0)),
+            (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 0))
+            ] + tokens)]
+
+    # multi-step instructions
+    if name == "PUSH":
+        return [
+            get_parser("SUBC").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 4))]),
+            get_parser("STORE").parse([
+                (unit.Operand.DADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                ] + tokens)
+            ]
+    elif name == "POP":
+        return [
+            get_parser("LOAD").parse(tokens + [
+                (unit.Operand.DADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                ]),
+            get_parser("ADDC").parse([
+                (unit.Operand.ADDRESS, unit.LazyLabel(util.LABEL_CONSTANT, memory.ESP)),
+                (unit.Operand.CONSTANT, unit.LazyLabel(util.LABEL_CONSTANT, 4))])
+            ]
+
+    return [get_parser(name).parse(tokens)]

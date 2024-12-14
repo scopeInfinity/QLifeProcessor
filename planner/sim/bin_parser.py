@@ -2,11 +2,15 @@ import random
 import logging
 
 from typing import List, Optional
-from planner import instruction
+from planner import instruction, memory
 from planner.sim import devices
 
-PROGRAM_ORG = 0x40
+logging.basicConfig(level=logging.INFO)
+
+PROGRAM_ORG = memory.DEFAULT_PROGRAM_ORG
 IO_DEVICES = 16
+
+RAM_SIZE = 0x10000  # 64KB
 
 def binary_array_num(arr: List[int]):
     return sum([x<<(8*i) for i, x in enumerate(arr)])
@@ -17,7 +21,7 @@ class BinRunner:
         self.ram = []
         self.input_devices = [None]*IO_DEVICES
         self.output_devices = [None]*IO_DEVICES
-        for _ in range(PROGRAM_ORG):
+        for _ in range(RAM_SIZE):
             self.ram.append(random.randint(0, 256))
 
         self.parse(content)
@@ -41,8 +45,10 @@ class BinRunner:
         assert set(content) <= set(['0', '1'])
         program_size = int(content[:8], 2)
         assert program_size*8+8 == len(content)
+        address = PROGRAM_ORG
         for i in range(1, len(content)//8):
-            self.ram.append(int(content[i*8:(i+1)*8], 2))
+            self.ram[address] = (int(content[i*8:(i+1)*8], 2))
+            address += 1
 
     def read_ram(self, addr: int, count: int) -> List[int]:
         ans = []
@@ -126,6 +132,9 @@ class BinRunner:
             if self.flags[FLAGS_BIT_VW_ZERO] == 1:
                 self.pc_next = vw_value
             return
+        if sel == instruction.MBlockSelector_stage3.HLT:
+            self.is_powered_on = False
+            return
         raise Exception(f"unsupported selector: {sel}")
 
     def m_alu(self, rw: int, r: int, op: instruction.ALU):
@@ -133,7 +142,13 @@ class BinRunner:
         assert r>=0 and r<(1<<32)
         return instruction.ALU.execute(op, rw, r)
 
+    def run_until_hlt(self):
+        while self.is_powered_on:
+            self.step()
+
     def step(self):
+        if not self.is_powered_on:
+            return
         self.pc = self.pc_next
         self.pc_next = self.pc + 4
         logging.debug("PC: 0x%x, flags: %s", self.pc, self.flags)
