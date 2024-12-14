@@ -47,12 +47,12 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
         if op.upper() == memory.TOKEN_ESP:
             optype = address_of(optype)
             op = str(memory.ESP)
-        elif op.startswith("R"):
+        elif op in memory.TOKEN_GENERAL_REGISTERS:
             optype = address_of(optype)
             try:
                 rindex = int(op[1:])
             except ValueError as e:
-                raise ValueError(f"Invalid mem-register {op} provided, only R0..R{memory.GENERAL_REGISTERS_COUNT} supported: {e}")
+                raise ValueError(f"Invalid mem-register {op} provided, only R0..R{memory.GENERAL_REGISTERS_COUNT-1} supported: {e}")
             op = str(memory.get_register_address(rindex))
         try:
             int_val = int(op, 0)

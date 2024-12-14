@@ -2,6 +2,7 @@ LABEL_PROGRAM_ORG = "PROGRAM_ORG"
 
 # General Register R0,..R15
 GENERAL_REGISTERS_COUNT = 8
+TOKEN_GENERAL_REGISTERS = [f"R{i}" for i in range(0, GENERAL_REGISTERS_COUNT)]
 def get_register_address(index):
     assert index >=0 and index < GENERAL_REGISTERS_COUNT
     return index*4
