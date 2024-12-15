@@ -1,7 +1,7 @@
 import string
 
 LABEL_CONSTANT = "constant"
-PROGRAM_ORG = "PROGRAM_ORG"
+LABEL_TMP = "__tmp__"
 
 def is_valid_label(msg):
     if len(msg) == 0:

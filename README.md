@@ -5,27 +5,17 @@
 
 The eventual goal(?) is to build a general-purpose processor integrated with simple input (e.g. buttons) and output devices (8x8 LED display).
 
-## Verification
+## Sample Programs
 
-### Emulation
-
-```
-# Build ROM[boot]
-$ python3 -rb assembler/assembler.py programs/boot_sequence.asm | tee build/boot_rom.txt.
-
-# Write your program in custom assembly.
-$ cat programs/ping_pong.asm # we can proceeding with this
-
-# Use assembler to translate the instructions into machine code.
-$ mkdir -p build
-$ python3 assembler/assembler.py -r programs/ping_pong.asm | tee build/ping_pong_resolved.txt # optional
-$ python3 assembler/assembler.py -rb programs/ping_pong.asm | tee build/ping_pong_rom.txt
-
-# Use emulater the run the machine code.
-$ python3 emulator/emulate.py build/ping_pong_rom.txt
-```
+* Ping Pong
+  * Source: [ping_pong.asm](programs/ping_pong.asm)
+  * Generate resolved assembly: `python3 -m planner asm -r programs/ping_pong.asm` [[example](output/programs/ping_pong_resolved.asm)]
+  * Generate binary: `python3 -m planner asm -b programs/ping_pong.asm` [[example](output/programs/ping_pong.bin)]
+  * Run on emulator: `python3 -m planner compile_and_execute ping_pong`
 
 ## Design
+
+This section is not up-to date.
 
 ### Specs
 

@@ -1,21 +1,28 @@
 from typing import List
 import logging
-
+from threading import Thread
+from copy import deepcopy
+import time
 
 class Device:
     def __init__(self, bits = 8):
-        assert 1 <= bits and bits <= 32
+        assert 0 <= bits and bits <= 32
+        self.bits = bits
         self.value = [0 for _ in range(bits)]
         self.change_handlers = []
+
+    def get_bit_count(self):
+        return self.bits
 
     def add_change_handler(self, f):
         self.change_handlers.append(f)
 
     def _new_value(self, val):
         if val != self.value:
-            for handle in self.change_handlers:
-                handle(val, self.value)
+            old_value = self.value
             self.value = val
+            for handle in self.change_handlers:
+                handle(val, old_value)
 
     def get(self):
         return sum([self.value[i]<<i for i in range(len(self.value))])
@@ -62,7 +69,7 @@ class LatchInput(InputDevice):
         self.update(value)
 
     def take_input(self):
-        print(f"Input for Latch[{self.name}]: ", end="")
+        # print(f"Input for Latch[{self.name}]: ", end="")
         return self.get()
 
 
@@ -82,9 +89,9 @@ class Numpad(InputDevice):
 
 
 class IntegerOutput(Device):
-    def __init__(self, name: str):
+    def __init__(self, name: str, **kwargs):
         self.name = name
-        super(IntegerOutput, self).__init__(bits=16)
+        super(IntegerOutput, self).__init__(**kwargs)
 
         def _on_change(new_val, old_val):
             self.on_change(new_val, old_val)
@@ -93,3 +100,121 @@ class IntegerOutput(Device):
     def on_change(self, new_val, old_val):
         print(f"Output [{self.name}]: {new_val}")
 
+
+class LEDDisplay(Device):
+    '''
+    +----------------+
+    |                |
+    | .              |
+    |                |
+    |                |
+    +----------------+
+
+    '''
+    def __init__(self, name: str, width_anode=16, height_cathode=8):
+        # Assume cathode (+ve) is at height
+        # Assume anode (-ve) is at width
+
+        super(LEDDisplay, self).__init__(bits=0)
+
+        self.name = name
+        self.height = height_cathode
+        self.width = width_anode
+        assert self.width <= 32
+        assert self.height <= 32
+        self.leds = []
+        self.leds_voltage_diff = []
+        self.anodes = [IntegerOutput("anode", bits=self.width)]
+        self.cathodes = [IntegerOutput("cathode", bits=self.height)]
+        self.led_brightness_threshold = 0.1
+        # led should be on for 0.02 secs to stay on
+        self.led_brightness_recompute_lag = 0.01 # secs
+        # led will stay on for 0.1 secs
+        self.led_brightness_reduce_per_step = 0.1
+        for _ in range(self.height):
+            self.leds.append([0]*self.width)
+            self.leds_voltage_diff.append([0]*self.width)
+
+        for i in range(len(self.cathodes)):
+            def _on_change(new_val, old_val):
+                self.on_change_cathode(i, new_val, old_val)
+            self.cathodes[i].add_change_handler(_on_change)
+        for i in range(len(self.anodes)):
+            def _on_change(new_val, old_val):
+                self.on_change_anode(i, new_val, old_val)
+            self.anodes[i].add_change_handler(_on_change)
+
+        self.last_display = None
+        self.thread = Thread(None, self.step)
+        self.thread.start()
+        # we aren't gonna join
+
+
+    def step(self):
+        while True:
+            self.recompute_brightness_step()
+            self.display(only_if_changed=True)
+            time.sleep(self.led_brightness_recompute_lag)
+
+    def get_anodes(self):
+        return self.anodes
+
+    def get_cathodes(self):
+        return self.cathodes
+
+    def on_change_cathode(self, index: int, new_val: int, old_val: int):
+        self.refetch_voltage()
+
+    def on_change_anode(self, index: int, new_val: int, old_val: int):
+        self.refetch_voltage()
+
+    def output_val_to_voltage(self, index: int, val):
+        return 5 if (val&(1<<index))>0 else 0
+
+    def refetch_voltage(self):
+        _i = 0
+        for i in range(len(self.cathodes)):
+            for i2 in range(self.cathodes[i].get_bit_count()):
+                _j = 0
+                for j in range(len(self.anodes)):
+                    for j2 in range(self.anodes[j].get_bit_count()):
+                        self.leds_voltage_diff[_i][_j] = (
+                            self.output_val_to_voltage(i2, self.cathodes[i].get()) -
+                            self.output_val_to_voltage(j2, self.anodes[j].get())
+                            )
+                        _j += 1
+                _i += 1
+
+    def recompute_brightness_step(self):
+        for i in range(self.height):
+            for j in range(self.width):
+                if self.leds_voltage_diff[i][j] > 3:
+                    self.leds[i][j]=1
+                else:
+                    self.leds[i][j]=max(self.leds[i][j]-self.led_brightness_reduce_per_step, 0)
+
+    def get_display_state(self):
+        state = []
+        for i in range(self.height):
+            val = [x>self.led_brightness_threshold for x in self.leds[i]]
+            val = val[::-1]  # lsb should support right most led
+            state.append(val)
+        return state
+
+    def display_as_str(self):
+        state = self.get_display_state()
+        dis = []
+        dis.append("+%s+"'' % ('-'*3*self.width))
+        for i in range(len(state)):
+            val = ['#' if x else '.' for x in state[i]]
+            dis.append(''.join(["|%s|" % (x) for x in val]))
+        dis.append("+%s+"''  % ('-'*3*self.width))
+        return '\n'.join(dis)
+
+
+    def display(self, only_if_changed=True):
+        new_display = self.get_display_state()
+        if only_if_changed and new_display == self.last_display:
+            return
+        self.last_display = new_display
+        print(new_display)

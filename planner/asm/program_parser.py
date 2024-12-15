@@ -1,7 +1,7 @@
 import logging
 from typing import List, Union, Optional
 
-from planner import instruction, unit, util
+from planner import instruction, unit, util, memory
 
 from planner.asm import line_parser
 
@@ -52,22 +52,23 @@ class AsmParser:
             resolved = True  # implict
         if resolved:
             self.lm.propogate()
-        assert util.PROGRAM_ORG in self.lm.labels, f"{util.PROGRAM_ORG} label must be defined"
+        assert memory.LABEL_PROGRAM_ORG in self.lm.labels, f"{memory.LABEL_PROGRAM_ORG} label must be defined"
 
         track_binary_address = None
         _content = []
         if not rom_binary:
-            _content.append(f"{util.PROGRAM_ORG} equ {self.lm.labels[util.PROGRAM_ORG].get()}")
+            _content.append(f"{memory.LABEL_PROGRAM_ORG} equ {self.lm.labels[memory.LABEL_PROGRAM_ORG].get()}")
         for add, x in self.final_bytes:
+            resolved_instruction_with_address = f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}"
             if not rom_binary:
-                _content.append(f"{add:03x}:  {x.get_str(resolved=resolved, binary=False)}")
+                _content.append(resolved_instruction_with_address)
             else:
                 if track_binary_address is None:
-                    track_binary_address = add # first address can be util.PROGRAM_ORG
+                    track_binary_address = add # first address can be memory.LABEL_PROGRAM_ORG
                 assert track_binary_address == add, "gaps found in binary representation"
                 out = f"{x.get_str(resolved=resolved, binary=True)}"
                 _content.append(out)
-                assert len(out) % 8 == 0
+                assert len(out) % 8 == 0, f"failed at {resolved_instruction_with_address}"
                 track_binary_address += len(out)//8
 
         content = '\n'.join(_content)
@@ -80,8 +81,8 @@ class AsmParser:
                 )
             assert len(_program_content) % 8 == 0
             _program_size = len(_program_content) // 8 # bytes
-            assert _program_size < 2**8 # as we are using 1 byte for metadata
-            _binary_content = f"{_program_size:08b}" + _program_content
+            assert _program_size < 2**32 # as we are using 4 bytes for metadata
+            _binary_content = f"{_program_size:032b}" + _program_content
             assert len(_binary_content) % 8 == 0
             assert set(_binary_content) <= set(['0', '1']), "only binary context is expected"
 
@@ -133,7 +134,8 @@ class AsmParser:
             return
         for _, token in tokens:
             self.lm.add_lazy(token)
-        self.add_ins(instruction.get_parser(ins_name).parse(tokens))
+        for ins in instruction.parse(ins_name, tokens):
+            self.add_ins(ins)
 
     def parse_data(self, tokens: List[str]):
         label = tokens[0]
@@ -155,7 +157,7 @@ class AsmParser:
             raise ValueError("unsupported data size provided")
 
         # unsigned integer only for now
-        val = int(tokens[2])
+        val = int(tokens[2], 0)
         assert val >= 0 and val < (2**(8*sz))
 
         for _ in range(times):
@@ -163,23 +165,25 @@ class AsmParser:
                 self.add_data(unit.Data(byte))
 
     def parse_bss(self, tokens: List[str]):
-        if len(tokens) == 3:
-            assert tokens[0].endswith(":"), f"bss tokens: {tokens}"
+        nothing_happened = True
+        if len(tokens) >= 1 and tokens[0].endswith(":"):
             label = tokens[0][:-1]
             self.lm.new_label(label, self.get_address())
             tokens = tokens[1:]
-
-        assert tokens[0] == "resb"
-        sz = int(tokens[1])
-        for _ in range(sz):
-            self.add_data(unit.Data(None))
+            nothing_happened = False
+        if len(tokens) >= 1 and tokens[0] == "resb":
+            sz = int(tokens[1])
+            for _ in range(sz):
+                self.add_data(unit.Data(None))
+            nothing_happened = False
+        assert not nothing_happened
 
     def parse_constant(self, tokens: List[str]):
         assert tokens[1].lower() == "equ"
         self.lm.new_label(tokens[0], int(tokens[2], 0))
-        if tokens[0] == util.PROGRAM_ORG:
-            assert self.get_address() == 0, f"{util.PROGRAM_ORG} must be the first label defined"
-            self.add_address(self.lm.labels[util.PROGRAM_ORG].get())
+        if tokens[0] == memory.LABEL_PROGRAM_ORG:
+            assert self.get_address() == 0, f"{memory.LABEL_PROGRAM_ORG} must be the first label defined"
+            self.add_address(self.lm.labels[memory.LABEL_PROGRAM_ORG].get())
         return
 
     def parse_line(self, line: str):
@@ -212,3 +216,12 @@ class AsmParser:
             self.parse_bss(tokens)
         else:
             raise Exception(f"unknown section: {self.get_section()}")
+
+    def parse_lines(self, lines: List[str]):
+        line_no = 1
+        for line in lines:
+            try:
+                self.parse_line(line)
+            except ValueError as e:
+                raise ValueError(f"Parse failed at {line_no}: {e}\n {line}")
+            line_no += 1
