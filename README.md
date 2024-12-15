@@ -9,8 +9,8 @@ The eventual goal(?) is to build a general-purpose processor integrated with sim
 
 * Ping Pong
   * Source: [ping_pong.asm](programs/ping_pong.asm)
-  * Generate resolved assembly: `python3 -m planner asm -r programs/ping_pong.asm`
-  * Generate binary: `python3 -m planner asm -b programs/ping_pong.asm`
+  * Generate resolved assembly: `python3 -m planner asm -r programs/ping_pong.asm` [[example](output/programs/ping_pong_resolved.asm)]
+  * Generate binary: `python3 -m planner asm -b programs/ping_pong.asm` [[example](output/programs/ping_pong.bin)]
   * Run on emulator: `python3 -m planner compile_and_execute ping_pong`
 
 ## Design

@@ -1,0 +1,4 @@
+PROGRAM_ORG equ 64
+040:  IN [4], 5
+044:  OUT 6, [4]
+048:  JMP 64, 0

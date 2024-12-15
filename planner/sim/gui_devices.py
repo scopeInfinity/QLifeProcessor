@@ -1,5 +1,8 @@
 from planner.sim import devices
 import logging
+
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
 class GUIDevice:
