@@ -7,8 +7,8 @@ OUTPUT_DIR=output
 all: all_programs_binary all_programs_resolved
 
 clean:
-	rm -r $(BUILD_DIR)
-	rm -r $(OUTPUT_DIR)
+	rm -rf $(BUILD_DIR)
+	rm -rf $(OUTPUT_DIR)
 
 include emulator/Makefile.mk
 
@@ -30,4 +30,4 @@ $(OUTPUT_DIR)/programs/%_resolved.asm: programs/%.asm
 	python3 -m planner asm -r $^ > $@
 
 run_ping_pong:
-	python3 -m planner -v compile_and_execute ping_pong
+	python3 -m planner compile_and_execute ping_pong

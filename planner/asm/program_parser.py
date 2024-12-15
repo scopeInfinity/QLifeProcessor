@@ -157,7 +157,7 @@ class AsmParser:
             raise ValueError("unsupported data size provided")
 
         # unsigned integer only for now
-        val = int(tokens[2])
+        val = int(tokens[2], 0)
         assert val >= 0 and val < (2**(8*sz))
 
         for _ in range(times):

@@ -47,6 +47,9 @@ def parse_line(line: str) -> Tuple[Optional[str], Optional[List[Tuple[unit.Opera
         if op.upper() == memory.TOKEN_ESP:
             optype = address_of(optype)
             op = str(memory.ESP)
+        if op.upper() == memory.TOKEN_ESB:
+            optype = address_of(optype)
+            op = str(memory.ESB)
         elif op in memory.TOKEN_GENERAL_REGISTERS:
             optype = address_of(optype)
             try:
