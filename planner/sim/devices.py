@@ -1,4 +1,5 @@
-from typing import List
+from planner import util
+from typing import List, Optional
 import logging
 from threading import Thread
 from copy import deepcopy
@@ -54,10 +55,6 @@ class InputDevice(Device):
     def __init__(self, *args, **kwargs):
         super(InputDevice, self).__init__(*args, **kwargs)
 
-    def take_input(self):
-        # empty device
-        pass
-
 
 class LatchInput(InputDevice):
     def __init__(self, name: str, **kwargs):
@@ -68,9 +65,9 @@ class LatchInput(InputDevice):
     def set_input(self, value: int):
         self.update(value)
 
-    def take_input(self):
+    def get(self):
         # print(f"Input for Latch[{self.name}]: ", end="")
-        return self.get()
+        return super().get()
 
 
 class Numpad(InputDevice):
@@ -80,12 +77,12 @@ class Numpad(InputDevice):
         self.name = name
         self.update(0)
 
-    def take_input(self):
+    def get(self):
         print(f"Input for Numpad[{self.name}]: ", end="")
         val = int(input())
         assert val >= 0 and val <= 9
         self.flip_bit(val)
-        return self.get()
+        return super().get()
 
 
 class IntegerOutput(Device):
@@ -98,8 +95,7 @@ class IntegerOutput(Device):
         self.add_change_handler(_on_change)
 
     def on_change(self, new_val, old_val):
-        print(f"Output [{self.name}]: {new_val}")
-
+        pass
 
 class LEDDisplay(Device):
     '''
@@ -111,7 +107,7 @@ class LEDDisplay(Device):
     +----------------+
 
     '''
-    def __init__(self, name: str, width_anode=16, height_cathode=8):
+    def __init__(self, name: str, use_print: Optional[bool] = True, width_anode=16, height_cathode=8):
         # Assume cathode (+ve) is at height
         # Assume anode (-ve) is at width
 
@@ -126,6 +122,7 @@ class LEDDisplay(Device):
         self.leds_voltage_diff = []
         self.anodes = [IntegerOutput("anode", bits=self.width)]
         self.cathodes = [IntegerOutput("cathode", bits=self.height)]
+        self.use_print = use_print
         self.led_brightness_threshold = 0.1
         # led should be on for 0.02 secs to stay on
         self.led_brightness_recompute_lag = 0.01 # secs
@@ -217,4 +214,30 @@ class LEDDisplay(Device):
         if only_if_changed and new_display == self.last_display:
             return
         self.last_display = new_display
-        print(new_display)
+        if self.use_print:
+            print(new_display)
+
+
+class ProgramROM(object):
+    def __init__(self, name: str, content: str, **kwargs):
+        #super(ProgramROM, self).__init__(**kwargs, bits= 0)
+        self.name = name
+        self.content = self.parse(content)
+        self.address_bits = 16
+        self.value_bits = 32
+        self.address_line = IntegerOutput("address", bits=self.address_bits)
+        self.value_line = LatchInput("value", bits=self.value_bits)
+        def _on_change(_, __):
+            address = self.address_line.get()
+            value=util.from_little_32binary(self.content[address*8:address*8+32])
+            self.value_line.update(value)
+        _on_change(self.address_line.get(), None)
+        self.address_line.add_change_handler(_on_change)
+
+    def parse(self, content: str):
+        content = content.replace(" ", "").replace("\n", "")
+        assert len(content)%8 == 0
+        assert set(content) <= set(['0', '1'])
+        program_size = util.from_little_32binary(content[:32])
+        assert program_size*8+32 == len(content)
+        return content

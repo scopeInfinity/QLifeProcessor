@@ -16,6 +16,9 @@ MSI = 0x28  # multi-step instruction state
 
 # free
 
+# boot sequence
+BOOTSEQUENCE_ORG = 0x30
+
 # user program
 
-DEFAULT_PROGRAM_ORG = 0x40
+DEFAULT_PROGRAM_ORG = 0x80

@@ -82,7 +82,7 @@ class AsmParser:
             assert len(_program_content) % 8 == 0
             _program_size = len(_program_content) // 8 # bytes
             assert _program_size < 2**32 # as we are using 4 bytes for metadata
-            _binary_content = f"{_program_size:032b}" + _program_content
+            _binary_content = util.to_little_32binary(_program_size) + _program_content
             assert len(_binary_content) % 8 == 0
             assert set(_binary_content) <= set(['0', '1']), "only binary context is expected"
 

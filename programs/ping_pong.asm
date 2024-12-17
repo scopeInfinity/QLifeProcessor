@@ -2,8 +2,7 @@
 #       Two Player Ping Pong Game
 #
 #   Controls
-#       Up/Down button for each player
-#       Game Reset button
+#       W/S/Up/Down keyys to move bat
 #   Display (16*8)
 #
 #   X
@@ -13,25 +12,21 @@
 #                   X
 #
 #
-#   Chip
-#       H/W: 4+1 buttons, 2 8x8 LED matrix
-#       OUT[0..7] = LED Matrix Row
-#       OUT[8..15] = LED Matrix 1 Col
-#       OUT[16..23] = LED Matrix 2 Col
 
-# Input(1) = Numpad(0-7)
-# Input(2) = Numpad(0-9)
-# Output(6) = LED(width=16, low_is_enabled)
-# Output(7) = LED(height=8, high_is_enabled)
+# input(1) = Keyboard({"W": 0, "S": 1, "UP": 2, "DOWN": 3})
+INPUT_DEVICE equ 1
+
+# display = LEDDisplay("LED", width_anode=16, height_cathode=8)
+# output(6) = display.get_anodes()[0]
+# Output(7) = display.get_cathodes()[0]
+OUTPUT_WIDTH equ 6
+OUTPUT_HEGHT equ 7
 
 
-PROGRAM_ORG equ 0x40
+PROGRAM_ORG equ 0x80
 
 BAT_H    equ 3
 BAT_MAXY equ 5
-OUTPUT_WIDTH equ 6
-OUTPUT_HEGHT equ 7
-INPUT_DEVICE equ 1
 
 BALL_STEP_SIZE equ 2
 GAME_OVER_BLINK_STEP equ 5

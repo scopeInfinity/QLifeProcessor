@@ -2,10 +2,9 @@ import random
 import logging
 
 from typing import List, Optional
-from planner import instruction, memory
+from planner import instruction, memory, util
 from planner.sim import devices
 
-PROGRAM_ORG = memory.DEFAULT_PROGRAM_ORG
 IO_DEVICES = 16
 
 RAM_SIZE = 0x10000  # 64KB
@@ -15,15 +14,15 @@ def binary_array_num(arr: List[int]):
 
 FLAGS_BIT_VW_ZERO = 0
 class BinRunner:
-    def __init__(self, content):
+    def __init__(self, bootsequence_binary):
         self.ram = []
         self.input_devices = [None]*IO_DEVICES
         self.output_devices = [None]*IO_DEVICES
         for _ in range(RAM_SIZE):
             self.ram.append(random.randint(0, 256))
 
-        self.parse(content)
-        self.pc_next = PROGRAM_ORG
+        self.parse_bs(bootsequence_binary)
+        self.pc_next = memory.BOOTSEQUENCE_ORG
         self.pc = None
         # self.is_powered_on = False
         # self.step()
@@ -37,16 +36,17 @@ class BinRunner:
     def set_output_device(self, index: int, d: devices.Device):
         self.output_devices[index] = d
 
-    def parse(self, content: str):
-        content = content.replace(" ", "").replace("\n", "")
+    def parse_bs(self, bootsequence_binary: str):
+        content = bootsequence_binary.replace(" ", "").replace("\n", "")
         assert len(content)%8 == 0
         assert set(content) <= set(['0', '1'])
-        program_size = int(content[:32], 2)
+        program_size = util.from_little_32binary(content[:32])
         assert program_size*8+32 == len(content)
-        address = PROGRAM_ORG
+        address = memory.BOOTSEQUENCE_ORG
         for i in range(4, len(content)//8):
             self.ram[address] = (int(content[i*8:(i+1)*8], 2))
             address += 1
+        assert address <= memory.DEFAULT_PROGRAM_ORG
 
     def read_ram(self, addr: int, count: int) -> List[int]:
         ans = []
@@ -84,7 +84,7 @@ class BinRunner:
             # resize from 1 to 4 bytes
             return vr_source
         if sel == instruction.MBlockSelector_stage1.VR_SOURCE_IO:
-            value = input_devices[vr_source].take_input()
+            value = input_devices[vr_source].get()
             assert value >= 0 and value < (1<<32)
             return value
         raise Exception(f"unsupported selector: {sel}")
