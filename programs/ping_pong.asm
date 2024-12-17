@@ -20,7 +20,7 @@ INPUT_DEVICE equ 1
 # output(6) = display.get_anodes()[0]
 # Output(7) = display.get_cathodes()[0]
 OUTPUT_WIDTH equ 6
-OUTPUT_HEGHT equ 7
+OUTPUT_HEIGHT equ 7
 
 
 PROGRAM_ORG equ 0x80
@@ -28,8 +28,8 @@ PROGRAM_ORG equ 0x80
 BAT_H    equ 3
 BAT_MAXY equ 5
 
-BALL_STEP_SIZE equ 2
-GAME_OVER_BLINK_STEP equ 5
+BALL_STEP_SIZE equ 3
+GAME_OVER_BLINK_STEP equ 15
 
 BALL_DIR_RIGHT    equ 1
 BALL_DIR_LEFT     equ 2
@@ -66,6 +66,11 @@ section .data
     game_over_blink_counter dd 0
     game_over_blink dd 1
 
+    bat1_anode_mask dd 0x7FFF
+    bat2_anode_mask dd 0xFFFE
+    displayoff_anode_mask dd 0xFFFF
+
+
 section .text
   game:
     call print
@@ -86,7 +91,6 @@ section .text
   _game_over_step_end:
     subc [game_over_blink_counter], 1
     ret
-
 
   read_input_p1_up:
     IN R0, INPUT_DEVICE
@@ -127,27 +131,29 @@ section .text
 
     ## Player 1
     # anode col
-    movc R0, 0x7F
-    shlc R0, 8
-    xorc R0, 0xFF
+    mov R0, [bat1_anode_mask]
     # cathode row
     movc R1, 0x7
     shl R1, [bat1_y]
     OUT OUTPUT_WIDTH, R0
-    OUT OUTPUT_HEGHT, R1
-    call sleep
+    OUT OUTPUT_HEIGHT, R1
+    movc R1, 0
+    mov R0, [displayoff_anode_mask]
+    OUT OUTPUT_HEIGHT, R1
+    OUT OUTPUT_WIDTH, R0
 
     ## Player 2
     # anode col
-    movc R0, 0xFF
-    shlc R0, 8
-    xorc R0, 0xFE
+    mov R0, [bat2_anode_mask]
     # cathode row
     movc R1, 0x7
     shl R1, [bat2_y]
     OUT OUTPUT_WIDTH, R0
-    OUT OUTPUT_HEGHT, R1
-    call sleep
+    OUT OUTPUT_HEIGHT, R1
+    movc R1, 0
+    mov R0, [displayoff_anode_mask]
+    OUT OUTPUT_HEIGHT, R1
+    OUT OUTPUT_WIDTH, R0
 
   _draw_ball:
     ## Ball
@@ -160,17 +166,11 @@ section .text
     movc R2, 1
     shl R2, R0
     OUT OUTPUT_WIDTH, R1
-    OUT OUTPUT_HEGHT, R2
-    call sleep
-
-    ret
-
-  sleep:
-    movc R0, 0xF0
-    shlc R0, 1
-    _sleep:
-    subc R0, 1
-    jnz _sleep
+    OUT OUTPUT_HEIGHT, R2
+    movc R2, 0
+    mov R1, [displayoff_anode_mask]
+    OUT OUTPUT_HEIGHT, R2
+    OUT OUTPUT_WIDTH, R1
     ret
 
   step:

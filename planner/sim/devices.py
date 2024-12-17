@@ -119,18 +119,14 @@ class LEDDisplay(Device):
         assert self.width <= 32
         assert self.height <= 32
         self.leds = []
-        self.leds_voltage_diff = []
+        for _ in range(self.height):
+            self.leds.append([0]*self.width)
         self.anodes = [IntegerOutput("anode", bits=self.width)]
         self.cathodes = [IntegerOutput("cathode", bits=self.height)]
         self.use_print = use_print
-        self.led_brightness_threshold = 0.1
-        # led should be on for 0.02 secs to stay on
-        self.led_brightness_recompute_lag = 0.01 # secs
-        # led will stay on for 0.1 secs
-        self.led_brightness_reduce_per_step = 0.1
-        for _ in range(self.height):
-            self.leds.append([0]*self.width)
-            self.leds_voltage_diff.append([0]*self.width)
+        self.led_glow_duration = 0.05 # secs
+        self.led_brightness_recompute_lag = self.led_glow_duration/4 # secs/step
+        self.led_brightness_reduce_per_step = self.led_brightness_recompute_lag/self.led_glow_duration
 
         for i in range(len(self.cathodes)):
             def _on_change(new_val, old_val):
@@ -169,31 +165,34 @@ class LEDDisplay(Device):
         return 5 if (val&(1<<index))>0 else 0
 
     def refetch_voltage(self):
+        leds_voltage_diff = []
+        for _ in range(self.height):
+            leds_voltage_diff.append([0]*self.width)
         _i = 0
         for i in range(len(self.cathodes)):
             for i2 in range(self.cathodes[i].get_bit_count()):
                 _j = 0
                 for j in range(len(self.anodes)):
                     for j2 in range(self.anodes[j].get_bit_count()):
-                        self.leds_voltage_diff[_i][_j] = (
+                        leds_voltage_diff = (
                             self.output_val_to_voltage(i2, self.cathodes[i].get()) -
                             self.output_val_to_voltage(j2, self.anodes[j].get())
                             )
+                        if leds_voltage_diff > 3:
+                            # start glowing
+                            self.leds[_i][_j] = 1
                         _j += 1
                 _i += 1
 
     def recompute_brightness_step(self):
         for i in range(self.height):
             for j in range(self.width):
-                if self.leds_voltage_diff[i][j] > 3:
-                    self.leds[i][j]=1
-                else:
-                    self.leds[i][j]=max(self.leds[i][j]-self.led_brightness_reduce_per_step, 0)
+                self.leds[i][j]=max(self.leds[i][j]-self.led_brightness_reduce_per_step, 0)
 
     def get_display_state(self):
         state = []
         for i in range(self.height):
-            val = [x>self.led_brightness_threshold for x in self.leds[i]]
+            val = [x>0 for x in self.leds[i]]
             val = val[::-1]  # lsb should support right most led
             state.append(val)
         return state
