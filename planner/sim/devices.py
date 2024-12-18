@@ -1,9 +1,9 @@
 from planner import util
 from typing import List, Optional
-import logging
 from threading import Thread
-from copy import deepcopy
 import time
+import random
+import logging
 
 class Device:
     def __init__(self, bits = 8):
@@ -11,6 +11,7 @@ class Device:
         self.bits = bits
         self.value = [0 for _ in range(bits)]
         self.change_handlers = []
+        self._never_updated = True
 
     def get_bit_count(self):
         return self.bits
@@ -19,9 +20,10 @@ class Device:
         self.change_handlers.append(f)
 
     def _new_value(self, val):
-        if val != self.value:
+        if self._never_updated or val != self.value:
             old_value = self.value
             self.value = val
+            self._never_updated = False
             for handle in self.change_handlers:
                 handle(val, old_value)
 
@@ -67,6 +69,28 @@ class LatchInput(InputDevice):
 
     def get(self):
         # print(f"Input for Latch[{self.name}]: ", end="")
+        return super().get()
+
+
+class Clock(InputDevice):
+    def __init__(self):
+        super(Clock, self).__init__(bits=1)
+        self.name = "clock"
+        self.update(0)
+        self.thread = Thread(None, self.steps)
+
+    def start(self):
+        self.thread.start()
+
+    def steps(self,):
+        while True:
+            # full speed
+            self.tick()
+
+    def tick(self):
+        self.flip_bit(0)
+
+    def get(self):
         return super().get()
 
 
@@ -216,10 +240,63 @@ class LEDDisplay(Device):
         if self.use_print:
             print(new_display)
 
+RAM_SIZE = 0x10000  # 64KB
 
-class ProgramROM(object):
+class RAM(object):
+    def __init__(self):
+        self.name = "RAM"
+        self.size = RAM_SIZE
+        self.data = []
+        for _ in range(RAM_SIZE):
+            self.data.append(random.randint(0, 256))
+        self.address_bits = 16
+        self.value_bits = 32
+        self.address_line = IntegerOutput("ram_address", bits=self.address_bits)
+        self.is_write = IntegerOutput("ram_is_write", bits=1)
+        self.value_in_line = IntegerOutput("ram_value_in", bits=self.value_bits)
+        self.value_out_line = LatchInput("ram_value_out", bits=self.value_bits)
+
+        def _on_address_change(_, __):
+            address = self.address_line.get()
+            value=util.from_littlearray_32binary(self.read_ram(address, 4))
+            self.value_out_line.update(value)
+        self.address_line.add_change_handler(_on_address_change)
+
+        def _on_write_change(new_val, old_val):
+            if new_val[0] == 1:
+                assert old_val[0] == 0
+                address = self.address_line.get()
+                value = self.value_in_line.get()
+                self.write_ram(address, 4, value)
+                self.value_out_line.update(value)
+        self.is_write.add_change_handler(_on_write_change)
+
+    def read_ram(self, addr: int, count: int) -> List[int]:
+        ans = []
+        assert addr >= 0
+        for i in range(count):
+            if addr+i >= len(self.data):
+                raise ValueError(f"attempted to read outside ram: {addr+i} >= {len(self.data)}")
+            else:
+                ans.append(self.data[addr+i])
+
+        logging.debug("RAM[%04x] => %s", addr, ans)
+        return ans
+
+    def write_ram(self, addr: int, count: int, value: int) -> List[int]:
+        arr_value = []
+        for i in range(count):
+            arr_value.append(value&255)
+            value>>=8
+
+        assert addr >= 0
+        for i in range(count):
+            self.data[i+addr] = arr_value[i]
+        logging.debug("RAM[%04x] <= %s", addr, arr_value)
+
+
+class ROM(object):
     def __init__(self, name: str, content: str, **kwargs):
-        #super(ProgramROM, self).__init__(**kwargs, bits= 0)
         self.name = name
         self.content = self.parse(content)
         self.address_bits = 16
@@ -229,8 +306,10 @@ class ProgramROM(object):
         def _on_change(_, __):
             address = self.address_line.get()
             value=util.from_little_32binary(self.content[address*8:address*8+32])
+            logging.debug("ROM[%04x] => %s, %s", address, value, self.content[address*8:address*8+32])
             self.value_line.update(value)
-        _on_change(self.address_line.get(), None)
+
+        _on_change(None, None)
         self.address_line.add_change_handler(_on_change)
 
     def parse(self, content: str):

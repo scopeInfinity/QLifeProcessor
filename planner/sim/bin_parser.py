@@ -13,16 +13,18 @@ def binary_array_num(arr: List[int]):
     return sum([x<<(8*i) for i, x in enumerate(arr)])
 
 FLAGS_BIT_VW_ZERO = 0
+
 class BinRunner:
-    def __init__(self, bootsequence_binary):
-        self.ram = []
+    def __init__(self, clock: devices.Clock, ram: devices.RAM, brom: devices.ROM):
+        self.ram = ram
+        self.brom = brom
+        self.ram.is_write.update(0)
+
         self.input_devices = [None]*IO_DEVICES
         self.output_devices = [None]*IO_DEVICES
-        for _ in range(RAM_SIZE):
-            self.ram.append(random.randint(0, 256))
 
-        self.parse_bs(bootsequence_binary)
-        self.pc_next = memory.BOOTSEQUENCE_ORG
+        # self.parse_bs(bootsequence_binary)
+        self.reg_pc_next = memory.BOOTSEQUENCE_ORG
         self.pc = None
         # self.is_powered_on = False
         # self.step()
@@ -30,47 +32,45 @@ class BinRunner:
         self.flags = [0]
         # self.step()
 
+        self.stage = 0
+        def _on_clock_change(new_val, old_val):
+            if new_val[0] == 1:
+                assert old_val[0] == 0
+                self.clock_up()
+        clock.add_change_handler(_on_clock_change)
+
+    def clock_up(self):
+        if self.stage == 0:
+            self.trigger_stage0()
+        elif self.stage == 1:
+            self.trigger_stage1()
+        elif self.stage == 2:
+            self.trigger_stage2()
+        elif self.stage == 3:
+            self.trigger_stage3()
+        self.stage = (self.stage+1)%4
+
     def set_input_device(self, index: int, d: devices.InputDevice):
         self.input_devices[index] = d
 
     def set_output_device(self, index: int, d: devices.Device):
         self.output_devices[index] = d
 
-    def parse_bs(self, bootsequence_binary: str):
-        content = bootsequence_binary.replace(" ", "").replace("\n", "")
-        assert len(content)%8 == 0
-        assert set(content) <= set(['0', '1'])
-        program_size = util.from_little_32binary(content[:32])
-        assert program_size*8+32 == len(content)
-        address = memory.BOOTSEQUENCE_ORG
-        for i in range(4, len(content)//8):
-            self.ram[address] = (int(content[i*8:(i+1)*8], 2))
-            address += 1
-        assert address <= memory.DEFAULT_PROGRAM_ORG
 
     def read_ram(self, addr: int, count: int) -> List[int]:
-        ans = []
-        assert addr >= 0
-        for i in range(count):
-            if addr+i >= len(self.ram):
-                ans.append(random.randint(0, 256))
-            else:
-                ans.append(self.ram[addr+i])
-
-        logging.debug("RAM[%04x] => %s", addr, ans)
-        return ans
+        assert count == 4
+        self.ram.address_line.update(addr)
+        ins_binary = self.ram.value_out_line.get()
+        ins_binary_array = util.to_little_32binaryarray(ins_binary)
+        return ins_binary_array
 
     def write_ram(self, addr: int, count: int, value: int) -> List[int]:
-        arr_value = []
-        for i in range(count):
-            arr_value.append(value&255)
-            value>>=8
+        self.ram.address_line.update(addr)
+        assert count == 4
+        self.ram.value_in_line.update(value)
+        self.ram.is_write.update(1)
+        self.ram.is_write.update(0)
 
-        assert addr >= 0
-        for i in range(count):
-            self.ram[(i+addr)%len(self.ram)] = arr_value[i]
-
-        logging.debug("RAM[%04x] <= %s", addr, arr_value)
 
     def m_fetch_and_store_stage1(
         self,
@@ -131,17 +131,17 @@ class BinRunner:
             output_devices[vrw_source].update(vw_value)
             return
         if sel == instruction.MBlockSelector_stage3.PC_NEXT:
-            self.pc_next = vw_value
+            self.reg_pc_next = vw_value
             return
         if sel == instruction.MBlockSelector_stage3.PC_NEXT_IF_ZERO:
             # check previous vw_value flags
             if self.flags[FLAGS_BIT_VW_ZERO] == 1:
-                self.pc_next = vw_value
+                self.reg_pc_next = vw_value
             return
         if sel == instruction.MBlockSelector_stage3.PC_NEXT_IF_NOT_ZERO:
             # check previous vw_value flags
             if self.flags[FLAGS_BIT_VW_ZERO] == 0:
-                self.pc_next = vw_value
+                self.reg_pc_next = vw_value
             return
         if sel == instruction.MBlockSelector_stage3.HLT:
             self.is_powered_on = False
@@ -157,43 +157,99 @@ class BinRunner:
         while self.is_powered_on:
             self.step()
 
-    def step(self):
+    def is_boot_sequence(self):
+        return self.pc >= memory.BOOTSEQUENCE_ORG and self.pc < memory.DEFAULT_PROGRAM_ORG
+
+    def print_bootsequence_completed(self):
+        if hasattr(self, "_print_bootsequence_completed"):
+            return
+        self._print_bootsequence_completed = True
+        print("Boot sequence completed")
+
+    def trigger_stage0(self):
         if not self.is_powered_on:
             return
-        self.pc = self.pc_next
-        self.pc_next = self.pc + 4
-        logging.debug("PC: 0x%x, flags: %s", self.pc, self.flags)
-        ins_binary = self.read_ram(self.pc, 4)
-        ins = instruction.FullyEncodedInstruction.from_binary(ins_binary)
+        self.pc = self.reg_pc_next
+        logging.debug("[stage0] PC: 0x%x, flags: %s", self.pc, self.flags)
+
+        # Read instruction
+        if self.is_boot_sequence():
+            brom_address = self.pc-memory.BOOTSEQUENCE_LOAD
+            self.brom.address_line.update(brom_address)
+            ins_binary = self.brom.value_line.get()
+        else:
+            self.print_bootsequence_completed()
+            self.ram.is_write.update(0)
+            self.ram.address_line.update(self.pc)
+            ins_binary = self.ram.value_out_line.get()
+        ins_binary_array = util.to_little_32binaryarray(ins_binary)
+        ins = instruction.FullyEncodedInstruction.from_binary(ins_binary_array)
         logging.debug("Instruction data: %s", ins)
         logging.debug("Instruction encoding: %s",
             [str(x) for x in instruction.get_parsers_from_encoding(ins.encoded_instruction)])
-        mblock_s1 = ins.encoded_instruction.mblock_s1
-        mblock_s2 = ins.encoded_instruction.mblock_s2
-        mblock_s3 = ins.encoded_instruction.mblock_s3
-        alu_op = ins.encoded_instruction.alu_op
 
-        vr_source = ins.address_r.get()
-        vrw_source = ins.address_rw.get()
+        self.reg_mblock_s1 = ins.encoded_instruction.mblock_s1
+        self.reg_mblock_s2 = ins.encoded_instruction.mblock_s2
+        self.reg_mblock_s3 = ins.encoded_instruction.mblock_s3
+        self.reg_alu_op = ins.encoded_instruction.alu_op
 
-        vr_value = self.m_fetch_and_store_stage1(
+        self.reg_vr_source = ins.address_r.get()
+        self.reg_vrw_source = ins.address_rw.get()
+
+    def trigger_stage1(self):
+        if not self.is_powered_on:
+            return
+        self.reg_pc_next = self.pc + 4
+        logging.debug("[stage1] reg_vr_source: 0x%x, reg_mblock_s1: %s", self.reg_vr_source, self.reg_mblock_s1)
+        self.reg_vr_value = self.m_fetch_and_store_stage1(
             self.input_devices,
-            vr_source,
-            mblock_s1)
-        vrw_value = self.m_fetch_and_store_stage2(
-            vr_source,
-            vr_value,
-            vrw_source,
-            mblock_s2)
+            self.reg_vr_source,
+            self.reg_mblock_s1)
 
-        vw_value = self.m_alu(vrw_value, vr_value, alu_op)
 
+    def trigger_stage2(self):
+        if not self.is_powered_on:
+            return
+        logging.debug("[stage2] reg_vr_source: 0x%x, "
+                      "reg_vr_value: 0x%x, "
+                      "reg_vrw_source: 0x%x, "
+                      "reg_mblock_s2: %s, "
+                      "reg_alu_op: %s",
+                      self.reg_vr_source,
+                      self.reg_vr_value,
+                      self.reg_vrw_source,
+                      self.reg_mblock_s2,
+                      self.reg_alu_op)
+        self.reg_vrw_value = self.m_fetch_and_store_stage2(
+            self.reg_vr_source,
+            self.reg_vr_value,
+            self.reg_vrw_source,
+            self.reg_mblock_s2)
+
+        self.reg_vw_value = self.m_alu(
+            self.reg_vrw_value,
+            self.reg_vr_value,
+            self.reg_alu_op)
+
+
+    def trigger_stage3(self):
+        if not self.is_powered_on:
+            return
+        logging.debug("[stage3] reg_vw_value: 0x%x, "
+                      "reg_vrw_value: 0x%x, "
+                      "reg_vrw_source: 0x%x, "
+                      "reg_mblock_s3: %s",
+                      self.reg_vw_value,
+                      self.reg_vrw_value,
+                      self.reg_vrw_source,
+                      self.reg_mblock_s3)
         self.m_fetch_and_store_stage3(
             self.output_devices,
-            vw_value,
-            vrw_value,
-            vrw_source,
-            mblock_s3)
+            self.reg_vw_value,
+            self.reg_vrw_value,
+            self.reg_vrw_source,
+            self.reg_mblock_s3)
 
-        self.flags[FLAGS_BIT_VW_ZERO] = 1 if (vw_value==0) else 0
+        self.flags[FLAGS_BIT_VW_ZERO] = 1 if (self.reg_vw_value==0) else 0
+
 

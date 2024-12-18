@@ -21,10 +21,14 @@ def start():
     bsrom_binary = get_asm_binary(BOOTSEQUENCE_PATH)
     program_binary = get_asm_binary(PROGRAM_PATH)
 
-    _bin = bin_parser.BinRunner(bsrom_binary)
+    clock = devices.Clock()
+    ram = devices.RAM()
+    brom = devices.ROM("brom", bsrom_binary)
+
+    _bin = bin_parser.BinRunner(clock, ram, brom)
     gui_manager = gui_devices.GUIDeviceManager()
 
-    prom = devices.ProgramROM("prom", program_binary)
+    prom = devices.ROM("prom", program_binary)
     _bin.set_output_device(2, prom.address_line)
     _bin.set_input_device(2, prom.value_line)
 
@@ -43,7 +47,11 @@ def start():
     _bin.set_output_device(6, display.get_anodes()[0])
     _bin.set_output_device(7, display.get_cathodes()[0])
 
+    clock.start()
+    # for _ in range(8):
+    #     clock.tick()
+    #     clock.tick()
 
-    processor = Thread(None, step_runner, None, (_bin, ))
-    processor.start()
+    # processor = Thread(None, step_runner, None, (_bin, ))
+    # processor.start()
     gui_manager.draw_loop()
