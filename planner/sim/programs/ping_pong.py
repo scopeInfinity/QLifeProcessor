@@ -1,14 +1,10 @@
 from planner.asm import program_parser
 from planner.sim import bin_parser, devices, gui_devices
-from threading import Thread
+from planner import util
 import pygame
 
-BOOTSEQUENCE_PATH = "programs/boot_sequence.asm"
 PROGRAM_PATH = "programs/ping_pong.asm"
 
-def step_runner(_bin):
-    while True:
-        _bin.step()
 
 def get_asm_binary(fname: str):
     asm = program_parser.AsmParser()
@@ -18,7 +14,7 @@ def get_asm_binary(fname: str):
 
 
 def start():
-    bsrom_binary = get_asm_binary(BOOTSEQUENCE_PATH)
+    bsrom_binary = get_asm_binary(util.BOOTSEQUENCE_PATH)
     program_binary = get_asm_binary(PROGRAM_PATH)
 
     clock = devices.Clock()
@@ -48,10 +44,4 @@ def start():
     _bin.set_output_device(7, display.get_cathodes()[0])
 
     clock.start()
-    # for _ in range(8):
-    #     clock.tick()
-    #     clock.tick()
-
-    # processor = Thread(None, step_runner, None, (_bin, ))
-    # processor.start()
     gui_manager.draw_loop()

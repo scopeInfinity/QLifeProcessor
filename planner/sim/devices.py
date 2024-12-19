@@ -77,13 +77,20 @@ class Clock(InputDevice):
         super(Clock, self).__init__(bits=1)
         self.name = "clock"
         self.update(0)
-        self.thread = Thread(None, self.steps)
+        self.running_thread = None
 
     def start(self):
-        self.thread.start()
+        assert self.running_thread is None
+        self.running_thread = Thread(None, self.steps)
+        self.running_thread.start()
+
+    def stop(self):
+        t = self.running_thread
+        self.running_thread = None
+        t.join()
 
     def steps(self,):
-        while True:
+        while self.running_thread:
             # full speed
             self.tick()
 

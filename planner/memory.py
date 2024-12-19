@@ -21,5 +21,4 @@ BOOTSEQUENCE_LOAD = 0x30
 BOOTSEQUENCE_ORG  = 0x34  # as we have 4-byte rom size header at top
 
 # user program
-
 DEFAULT_PROGRAM_ORG = 0x80

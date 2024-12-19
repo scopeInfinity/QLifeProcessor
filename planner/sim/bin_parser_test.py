@@ -1,7 +1,19 @@
 from planner.asm import program_parser
 from planner.sim import bin_parser
 from planner.sim import devices
+from planner import util, memory
 from unittest import TestCase
+from typing import List
+
+
+def get_asm_binary_from_lines(lines: List[str]):
+    asm = program_parser.AsmParser()
+    asm.parse_lines(lines)
+    return asm.get_str(resolved=True, rom_binary=True)
+
+def get_asm_binary_from_file(fname: str):
+    with open(fname, "r") as f:
+        return get_asm_binary_from_lines(f.readlines())
 
 
 class BinParserTest(TestCase):
@@ -9,27 +21,40 @@ class BinParserTest(TestCase):
     FAKE_OUPUT_AT = 0x06
 
     def setUp(self) -> None:
-        self.asm = program_parser.AsmParser()
+        self.clock = devices.Clock()
+        ram = devices.RAM()
+
+        bsrom_binary = get_asm_binary_from_file(util.BOOTSEQUENCE_PATH)
+        brom = devices.ROM("brom", bsrom_binary)
+
         self.fake_input = devices.LatchInput("fake", bits=32)
         self.fake_ouput = devices.Device(bits=32)
-        self.bin = None
 
-    def execute(self, program: str):
-        self.asm.parse_lines(program.splitlines())
-        binary_program = self.asm.get_str(resolved=True, rom_binary=True)
-
-        self.bin = bin_parser.BinRunner(binary_program)
+        self.bin = bin_parser.BinRunner(self.clock, ram, brom)
         self.bin.set_input_device(self.FAKE_INPUT_AT, self.fake_input)
         self.bin.set_output_device(self.FAKE_OUPUT_AT, self.fake_ouput)
-        self.bin.run_until_hlt()
+
+
+    def execute(self, program: str):
+        program_binary = get_asm_binary_from_lines(program.splitlines())
+
+        prom = devices.ROM("prom", program_binary)
+        self.bin.set_output_device(2, prom.address_line)
+        self.bin.set_input_device(2, prom.value_line)
+
+        self.clock.start()
+        while self.bin.is_power_on():
+            pass
+        # wait for hlt
+        self.clock.stop()
 
     def get_ram_byte(self, address: int):
-        return self.bin.read_ram(address, 1)[0]
+        return self.bin.read_ram(address, 4)[0]
 
     def test_io(self):
         self.fake_input.set_input(10)
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 in R0, {self.FAKE_INPUT_AT}
@@ -40,7 +65,7 @@ class BinParserTest(TestCase):
 
     def test_mov(self):
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 movc R0, 0x45
@@ -53,7 +78,7 @@ class BinParserTest(TestCase):
 
     def test_simple_alu(self):
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 movc R0, 1
@@ -85,7 +110,7 @@ class BinParserTest(TestCase):
 
     def test_simple_aluc(self):
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 movc R1, 9
@@ -117,7 +142,7 @@ class BinParserTest(TestCase):
     def test_stack(self):
         self.fake_input.set_input(45)
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
 
             section .text
             main:
@@ -133,7 +158,7 @@ class BinParserTest(TestCase):
     def test_jmp(self):
         self.fake_input.set_input(45)
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
 
             section .text
             main:
@@ -172,7 +197,7 @@ class BinParserTest(TestCase):
 
     def test_data_section(self):
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 shlc [array_0], 2
@@ -193,7 +218,7 @@ class BinParserTest(TestCase):
 
     def test_bss_section(self):
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 movc R0, array_end
@@ -210,7 +235,7 @@ class BinParserTest(TestCase):
 
     def test_load_store(self):
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
             section .text
             main:
                 movc [array_ptr], array_0
@@ -237,7 +262,7 @@ class BinParserTest(TestCase):
     def test_call(self):
         self.fake_input.set_input(45)
         self.execute(f"""
-            PROGRAM_ORG equ 0x40
+            PROGRAM_ORG equ {memory.DEFAULT_PROGRAM_ORG}
 
             section .text
             main:

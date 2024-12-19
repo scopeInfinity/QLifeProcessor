@@ -153,9 +153,8 @@ class BinRunner:
         assert r>=0 and r<(1<<32)
         return instruction.ALU.execute(op, rw, r)
 
-    def run_until_hlt(self):
-        while self.is_powered_on:
-            self.step()
+    def is_power_on(self):
+        return self.is_powered_on
 
     def is_boot_sequence(self):
         return self.pc >= memory.BOOTSEQUENCE_ORG and self.pc < memory.DEFAULT_PROGRAM_ORG

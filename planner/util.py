@@ -1,9 +1,11 @@
 import string
 from typing import List
 
+BOOTSEQUENCE_PATH = "programs/boot_sequence.asm"
 
 LABEL_CONSTANT = "constant"
 LABEL_TMP = "__tmp__"
+
 
 def is_valid_label(msg):
     if len(msg) == 0:
