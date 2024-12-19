@@ -12,85 +12,28 @@ The eventual goal(?) is to build a general-purpose processor integrated with sim
   * Generate resolved assembly: `python3 -m planner asm -r programs/ping_pong.asm` [[example](output/programs/ping_pong_resolved.asm)]
   * Generate binary: `python3 -m planner asm -b programs/ping_pong.asm` [[example](output/programs/ping_pong.bin)]
   * Run on emulator: `python3 -m planner compile_and_execute ping_pong`
+    * 16x8 LED display with W/S/Up/Down keyboard controller
+    * ![image](https://github.com/user-attachments/assets/9fa2f68f-73ae-465c-a29c-cc92b0dc421a)
 
 ## Design
 
-This section is not up-to date.
-
 ### Specs
 
-* Address Line: 16-bits
+* Memory Address Line: 16-bits (points to a byte)
+* Memory Value Line: 32-bits (4 bytes)
 * Max Memory: 64KB
+* Memory layout: [here](planner/memory.py)
 
-### Constants
+#### Boot Sequence
+* `programs/boot_sequence.asm` binary (aka `BROM`) is mapped from address_line `BOOTSEQUENCE_LOAD = 0x30`
+* Memory Read
+  * If `BOOTSEQUENCE_ORG <= address_line < DEFAULT_PROGRAM_ORG`, pulls value from `BROM`
+  * Otherwise, pulls the value from `RAM`
+* Execution starts with `PC` at `BOOTSEQUENCE_ORG = 0x34`
+* `BROM` goal is to copy `PROM` to RAM at `DEFAULT_PROGRAM_ORG = 0x80`
+* Followed by `jmp DEFAULT_PROGRAM_ORG`
 
-* INSZ = 0x20, independent input bytes
-* OUTSZ = 0x20, independent output bytes
-* IPC = 0x0100, intial value of `PC` (or Program Counter).
-
-### Memory Allocation
-
-* `RAM[0:INSZ]` is mapped to I/O module input
-* `RAM[INSZ:OUTSZ]` is mapped to I/O module output
-* `RAM[IPC:IPC+x]` is loaded from ROM. So it essentially contains `.text`, `.data`.
-
-### Sequencing
-
-
-* At boot
-  * Load `ROM[0:x]` into `RAM[IPC:IPC+x]`
-    * TODO: How?
-
-### Assembly
-
-* `.bss` must be the last section.
-* Registers don't really exists. `R[0-7]` are mapped to memory location in `.bss` for convenience and some instructions return response.
-
-### Architecture
-
-#### I/O
-
-Hardware interact asynchronously with IOM (I/O Module) which then interact with RAM at program's will. (WE ARE NOT DOING IT)
-
-* Input devices publish state change in IOM and Output devices read from IOM.
-* Program use `IN <index>` instructions to read from `IOM_in[index]` and write to `RAM[index]`. `IOM_in` won't cache input and it will be read as real-time value. If a input state needs to be cached, it's the input device responsibility.
-* Program use `OUT <index>` instructions to read `RAM[INSZ+index]` and write to `IOM_out[index]`.
-
-
-
-# TODO
-
-## Processor
-
-* Address bits: 8
-* Register size: 8
-* Memory size: 2**8 = 256 bytes
-
-### Idea
-
-To keep number of component small, we would split a single instruction execution period into 4 cycles.
-
-* Reset
-  * Set `PC = 0`
-  * sub-cycle clock to cycle-0
-* Cycle 0
-  * Fetch instruction from `ROM[$PC]` into `pin_INS`
-* Cycle 1
-  * Perform first read
-
-## Assembler
-
-### Details
-
-* Registers: R0, R1, R2, R3 or `R{NUM}`
-
-* Input/Output pin: IO0, IO1, ..., IO7 or `IO{NUM}` (8-bits)
-
-### Instructions
-
-* `IN R{NUM}`: short-blocking input with 8-bit response.
-* `OUT R{NUM}`: short-blocking 8-bit output.
-
-## Syntax: High Level
-
-Not yet defined.
+#### PROM
+* Programs like `programs/ping_pong.asm` are translated into binary and are referred to as `PROM`.
+* `PROM` is connected to <chipset> as input-output device.
+* The equivalent program is loaded in RAM at `DEFAULT_PROGRAM_ORG = 0x80`, followed by execution after boot sequence.

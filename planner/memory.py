@@ -16,6 +16,9 @@ MSI = 0x28  # multi-step instruction state
 
 # free
 
-# user program
+# boot sequence
+BOOTSEQUENCE_LOAD = 0x30
+BOOTSEQUENCE_ORG  = 0x34  # as we have 4-byte rom size header at top
 
-DEFAULT_PROGRAM_ORG = 0x40
+# user program
+DEFAULT_PROGRAM_ORG = 0x80

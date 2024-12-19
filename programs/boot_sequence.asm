@@ -1,15 +1,14 @@
-# TODO: This is not ready yet
 #  Program
 #       ROM[BootSequence]
+#  Small program to copy PROM[1+i] to RAM[org+i]
 #
-#  Input devices required at 0x0
-#  * address
-#  Output devices
-#  * PROGRAM_ROM[address] at 0x0
-#  Really small program to copy ROM[Program] to RAM[Program]
+# output(2) = PROGRAM_ROM address line
+PROM_ADDRESS_LINE equ 2
+# input(2) = PROGRAM_ROM value
+PROM_VALUE_LINE equ 2
 
-PROGRAM_ORG equ 0x80
-PROGRAM_DEST equ 0x40
+PROGRAM_ORG equ 0x34
+RAM_PROGRAM_ORG equ 0x80
 
 ROM_INPUT_VALUE equ 0x0
 ROM_OUTPUT_ADDRESS  equ 0x0
@@ -19,24 +18,22 @@ section .text
     # read metadata: program size
     # assume size mod 4 = 0
     movc R0, 0
-    out  0x10, R0
-    in   R0, ROM_INPUT_VALUE
-    movc R5, 0
+    out  PROM_ADDRESS_LINE, R0
+    in   R0, PROM_VALUE_LINE
+    shrc R0, 2
 
-    movc R1, 1
-    movc R2, PROGRAM_DEST
-  _copy_more:
-    out 0x10, R1
-    in  R3, 0x20
+    movc R1, 4
+    movc R2, RAM_PROGRAM_ORG
+  copy_more:
+    cmpc R0, 0
+    jz copy_completed
+    out  PROM_ADDRESS_LINE, R1
+    in R3, PROM_VALUE_LINE
     store [R2], R3
-    addc R2, 4
-    addc R1, 4
-    subc R0, 4
+    addc  R2, 4
+    addc  R1, 4
+    subc  R0, 1
+    jmp copy_more
 
-    cmp R0, R5
-
-    # jmp to program if copy is completed
-    jz PROGRAM_DEST
-
-    jmp _copy_more
-
+  copy_completed:
+    jmp RAM_PROGRAM_ORG

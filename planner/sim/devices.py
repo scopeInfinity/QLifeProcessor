@@ -1,8 +1,9 @@
-from typing import List
-import logging
+from planner import util
+from typing import List, Optional
 from threading import Thread
-from copy import deepcopy
 import time
+import random
+import logging
 
 class Device:
     def __init__(self, bits = 8):
@@ -10,6 +11,7 @@ class Device:
         self.bits = bits
         self.value = [0 for _ in range(bits)]
         self.change_handlers = []
+        self._never_updated = True
 
     def get_bit_count(self):
         return self.bits
@@ -18,9 +20,10 @@ class Device:
         self.change_handlers.append(f)
 
     def _new_value(self, val):
-        if val != self.value:
+        if self._never_updated or val != self.value:
             old_value = self.value
             self.value = val
+            self._never_updated = False
             for handle in self.change_handlers:
                 handle(val, old_value)
 
@@ -54,10 +57,6 @@ class InputDevice(Device):
     def __init__(self, *args, **kwargs):
         super(InputDevice, self).__init__(*args, **kwargs)
 
-    def take_input(self):
-        # empty device
-        pass
-
 
 class LatchInput(InputDevice):
     def __init__(self, name: str, **kwargs):
@@ -68,9 +67,38 @@ class LatchInput(InputDevice):
     def set_input(self, value: int):
         self.update(value)
 
-    def take_input(self):
+    def get(self):
         # print(f"Input for Latch[{self.name}]: ", end="")
-        return self.get()
+        return super().get()
+
+
+class Clock(InputDevice):
+    def __init__(self):
+        super(Clock, self).__init__(bits=1)
+        self.name = "clock"
+        self.update(0)
+        self.running_thread = None
+
+    def start(self):
+        assert self.running_thread is None
+        self.running_thread = Thread(None, self.steps)
+        self.running_thread.start()
+
+    def stop(self):
+        t = self.running_thread
+        self.running_thread = None
+        t.join()
+
+    def steps(self,):
+        while self.running_thread:
+            # full speed
+            self.tick()
+
+    def tick(self):
+        self.flip_bit(0)
+
+    def get(self):
+        return super().get()
 
 
 class Numpad(InputDevice):
@@ -80,12 +108,12 @@ class Numpad(InputDevice):
         self.name = name
         self.update(0)
 
-    def take_input(self):
+    def get(self):
         print(f"Input for Numpad[{self.name}]: ", end="")
         val = int(input())
         assert val >= 0 and val <= 9
         self.flip_bit(val)
-        return self.get()
+        return super().get()
 
 
 class IntegerOutput(Device):
@@ -98,8 +126,7 @@ class IntegerOutput(Device):
         self.add_change_handler(_on_change)
 
     def on_change(self, new_val, old_val):
-        print(f"Output [{self.name}]: {new_val}")
-
+        pass
 
 class LEDDisplay(Device):
     '''
@@ -111,7 +138,7 @@ class LEDDisplay(Device):
     +----------------+
 
     '''
-    def __init__(self, name: str, width_anode=16, height_cathode=8):
+    def __init__(self, name: str, use_print: Optional[bool] = True, width_anode=16, height_cathode=8):
         # Assume cathode (+ve) is at height
         # Assume anode (-ve) is at width
 
@@ -123,17 +150,14 @@ class LEDDisplay(Device):
         assert self.width <= 32
         assert self.height <= 32
         self.leds = []
-        self.leds_voltage_diff = []
-        self.anodes = [IntegerOutput("anode", bits=self.width)]
-        self.cathodes = [IntegerOutput("cathode", bits=self.height)]
-        self.led_brightness_threshold = 0.1
-        # led should be on for 0.02 secs to stay on
-        self.led_brightness_recompute_lag = 0.01 # secs
-        # led will stay on for 0.1 secs
-        self.led_brightness_reduce_per_step = 0.1
         for _ in range(self.height):
             self.leds.append([0]*self.width)
-            self.leds_voltage_diff.append([0]*self.width)
+        self.anodes = [IntegerOutput("anode", bits=self.width)]
+        self.cathodes = [IntegerOutput("cathode", bits=self.height)]
+        self.use_print = use_print
+        self.led_glow_duration = 0.05 # secs
+        self.led_brightness_recompute_lag = self.led_glow_duration/4 # secs/step
+        self.led_brightness_reduce_per_step = self.led_brightness_recompute_lag/self.led_glow_duration
 
         for i in range(len(self.cathodes)):
             def _on_change(new_val, old_val):
@@ -172,31 +196,34 @@ class LEDDisplay(Device):
         return 5 if (val&(1<<index))>0 else 0
 
     def refetch_voltage(self):
+        leds_voltage_diff = []
+        for _ in range(self.height):
+            leds_voltage_diff.append([0]*self.width)
         _i = 0
         for i in range(len(self.cathodes)):
             for i2 in range(self.cathodes[i].get_bit_count()):
                 _j = 0
                 for j in range(len(self.anodes)):
                     for j2 in range(self.anodes[j].get_bit_count()):
-                        self.leds_voltage_diff[_i][_j] = (
+                        leds_voltage_diff = (
                             self.output_val_to_voltage(i2, self.cathodes[i].get()) -
                             self.output_val_to_voltage(j2, self.anodes[j].get())
                             )
+                        if leds_voltage_diff > 3:
+                            # start glowing
+                            self.leds[_i][_j] = 1
                         _j += 1
                 _i += 1
 
     def recompute_brightness_step(self):
         for i in range(self.height):
             for j in range(self.width):
-                if self.leds_voltage_diff[i][j] > 3:
-                    self.leds[i][j]=1
-                else:
-                    self.leds[i][j]=max(self.leds[i][j]-self.led_brightness_reduce_per_step, 0)
+                self.leds[i][j]=max(self.leds[i][j]-self.led_brightness_reduce_per_step, 0)
 
     def get_display_state(self):
         state = []
         for i in range(self.height):
-            val = [x>self.led_brightness_threshold for x in self.leds[i]]
+            val = [x>0 for x in self.leds[i]]
             val = val[::-1]  # lsb should support right most led
             state.append(val)
         return state
@@ -217,4 +244,85 @@ class LEDDisplay(Device):
         if only_if_changed and new_display == self.last_display:
             return
         self.last_display = new_display
-        print(new_display)
+        if self.use_print:
+            print(new_display)
+
+RAM_SIZE = 0x10000  # 64KB
+
+class RAM(object):
+    def __init__(self):
+        self.name = "RAM"
+        self.size = RAM_SIZE
+        self.data = []
+        for _ in range(RAM_SIZE):
+            self.data.append(random.randint(0, 256))
+        self.address_bits = 16
+        self.value_bits = 32
+        self.address_line = IntegerOutput("ram_address", bits=self.address_bits)
+        self.is_write = IntegerOutput("ram_is_write", bits=1)
+        self.value_in_line = IntegerOutput("ram_value_in", bits=self.value_bits)
+        self.value_out_line = LatchInput("ram_value_out", bits=self.value_bits)
+
+        def _on_address_change(_, __):
+            address = self.address_line.get()
+            value=util.from_littlearray_32binary(self.read_ram(address, 4))
+            self.value_out_line.update(value)
+        self.address_line.add_change_handler(_on_address_change)
+
+        def _on_write_change(new_val, old_val):
+            if new_val[0] == 1:
+                assert old_val[0] == 0
+                address = self.address_line.get()
+                value = self.value_in_line.get()
+                self.write_ram(address, 4, value)
+                self.value_out_line.update(value)
+        self.is_write.add_change_handler(_on_write_change)
+
+    def read_ram(self, addr: int, count: int) -> List[int]:
+        ans = []
+        assert addr >= 0
+        for i in range(count):
+            if addr+i >= len(self.data):
+                raise ValueError(f"attempted to read outside ram: {addr+i} >= {len(self.data)}")
+            else:
+                ans.append(self.data[addr+i])
+
+        logging.debug("RAM[%04x] => %s", addr, ans)
+        return ans
+
+    def write_ram(self, addr: int, count: int, value: int) -> List[int]:
+        arr_value = []
+        for i in range(count):
+            arr_value.append(value&255)
+            value>>=8
+
+        assert addr >= 0
+        for i in range(count):
+            self.data[i+addr] = arr_value[i]
+        logging.debug("RAM[%04x] <= %s", addr, arr_value)
+
+
+class ROM(object):
+    def __init__(self, name: str, content: str, **kwargs):
+        self.name = name
+        self.content = self.parse(content)
+        self.address_bits = 16
+        self.value_bits = 32
+        self.address_line = IntegerOutput("address", bits=self.address_bits)
+        self.value_line = LatchInput("value", bits=self.value_bits)
+        def _on_change(_, __):
+            address = self.address_line.get()
+            value=util.from_little_32binary(self.content[address*8:address*8+32])
+            logging.debug("ROM[%04x] => %s, %s", address, value, self.content[address*8:address*8+32])
+            self.value_line.update(value)
+
+        _on_change(None, None)
+        self.address_line.add_change_handler(_on_change)
+
+    def parse(self, content: str):
+        content = content.replace(" ", "").replace("\n", "")
+        assert len(content)%8 == 0
+        assert set(content) <= set(['0', '1'])
+        program_size = util.from_little_32binary(content[:32])
+        assert program_size*8+32 == len(content)
+        return content
