@@ -1,5 +1,7 @@
 `include "emulator/module/clock.v"
 `include "emulator/seq/register.v"
+`include "emulator/com/stage0.v"
+`include "emulator/com/stage1.v"
 
 
 module CHIPSET(
@@ -37,10 +39,14 @@ module CHIPSET(
 
 
     wire[15:0] ram_address_stage0;
+    wire[15:0] ram_address_stage1;
     // TODO: Updated ram_address
     assign ram_address = ram_address_stage0;
 
-
+    // Input Devices
+    wire[7:0] input_devices_address;
+    reg[31:0] input_devices_value;
+    // TODO: add devices modules
 
     // Boot Sequence
     //
@@ -64,21 +70,10 @@ module CHIPSET(
         .clk(clk[3]),
         );
 
-
-    // Following circuit is continous within each stages
-    // with exception of RAM write which relies on clock;
-    // wire[15:0] program_counter;
-    // wire[1:0] mblock_selector;
-    // wire[15:0] mblock_address;
-    // wire[31:0] mblock_input;
-    // wire[31:0] mblock_output;
-    // wire mblock_write;
-
-
     // STAGE0
-    wire[31:0] instruction_binary;
-    STAGE0 instruction_resolver(
-        .instruction_binary(instruction_binary),
+    wire[31:0] _instruction_binary;
+    STAGE0 stage0(
+        .instruction_binary(_instruction_binary),
         .ram_address(ram_address_stage0),
         .brom_address(brom_address),
         .ram_value(ram_value),
@@ -87,42 +82,35 @@ module CHIPSET(
         .execute_from_ram(execute_from_ram));
 
     // STAGE1
-    wire[31:0] instruction_binary_cached;
+    wire[31:0] instruction_binary;
     REGISTER_up_16b r_ins_bin(
-        .out(instruction_binary_cached),
-        .in(instruction_binary),
+        .out(instruction_binary),
+        .in(_instruction_binary),
         .clk(clk[1]));
 
-    wire[3:0] mblock_alu_op = instruction_binary_cached[3:0];
-    wire[3:0] mblock_s1 = instruction_binary_cached[5:4];
-    wire[1:0] mblock_s2 = instruction_binary_cached[8:6];
-    wire[2:0] mblock_s3 = instruction_binary_cached[11:9];
-    wire[7:0] vrw_source = instruction_binary_cached[23:16];
-    wire[7:0] vr_source = instruction_binary_cached[31:24];
+    wire[3:0] mblock_alu_op = instruction_binary[3:0];
+    wire[3:0] mblock_s1 = instruction_binary[5:4];
+    wire[1:0] mblock_s2 = instruction_binary[8:6];
+    wire[2:0] mblock_s3 = instruction_binary[11:9];
+    wire[7:0] vrw_source = instruction_binary[23:16];
+    wire[7:0] vr_source = instruction_binary[31:24];
 
-
-
-    // STAGE1
-
-    // TODO: Breakdown instruction_op into sub-operations
-
-    // TODO: Ensure MBLOCK supplies expectations.
-    // MBLOCK_MUX is expected to fetch MBLOCK based on v0_source and
-    // instruction_op breakdowns and redirect the value into v0.
-
-    // @stage1 posedge following should freeze.
-    wire[31:0] vr_value;
-;
-    FETCH_AND_STORE stage1(
-        .vr_value(vr_value),
-        .is_powered_on(is_powered_on),
-        .pc_next(pc_next),
-        .pc(pc),
-        .vr_source(vr_source),
+    wire[31:0] _vr_value;
+    STAGE1 stage1(
+        .vr_value(_vr_value),
+        .input_devices_address(input_devices_address),
+        .ram_address(ram_address),
         .mblock_s1(mblock_s1),
-        .clk(clk[1]));
+        .vr_source(vr_source),
+        .input_devices_value(input_devices_value),
+        .ram_value(ram_value));
 
     // STAGE2
+    wire[31:0] vr_value;
+    REGISTER_up_16b r_ins_bin(
+        .out(_vr_value),
+        .in(_instruction_binary),
+        .clk(clk[2]));
 
     // TODO: Ensure MBLOCK supplies expectations.
     // MBLOCK_MUX is expected to fetch MBLOCK based on v0_source and

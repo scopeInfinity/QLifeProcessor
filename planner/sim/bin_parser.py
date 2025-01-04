@@ -104,10 +104,10 @@ class BinRunner:
             return binary_array_num(self.read_ram(vr_value, 4))  # reading from 32-bit address
         if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_RAM:
             return binary_array_num(self.read_ram(vrw_source, 4))  # reading from 8-bit address
-        if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_CONST:
-            return vrw_source
         if sel == instruction.MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_RAM:
             return binary_array_num(self.read_ram((vr_source<<8) | vrw_source, 4))  # reading from 16-bit address
+        if sel == instruction.MBlockSelector_stage2.VRW_SOURCE_CONST:
+            return vrw_source
         if sel == instruction.MBlockSelector_stage2.VR_SOURCE_SHL8_VRW_SOURCE_CONST:
             return (vr_source<<8) | vrw_source
         if sel == instruction.MBlockSelector_stage2.PC:

@@ -51,14 +51,14 @@ class MBlockSelector_stage2(Enum):
     '''
     bits: [read_ram(vrw_source) else read_ram(vr_value)]
     '''
-    VRW_SOURCE_CONST = 0
-    VRW_SOURCE_RAM = 1
-    VR_VALUE_RAM = 2
+    VRW_SOURCE_CONST = 4
+    VRW_SOURCE_RAM = 0
+    VR_VALUE_RAM = 1
     # vr_source<<8 | vrw_source
     # Pretty specific operation for passing 16-bit constant or address
-    VR_SOURCE_SHL8_VRW_SOURCE_RAM = 3
-    VR_SOURCE_SHL8_VRW_SOURCE_CONST = 4
-    PC = 5
+    VR_SOURCE_SHL8_VRW_SOURCE_RAM = 2
+    VR_SOURCE_SHL8_VRW_SOURCE_CONST = 6
+    PC = 7
 
     # last one for reverse lookup
     DONT_CARE = 0
