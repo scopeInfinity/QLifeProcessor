@@ -1,12 +1,17 @@
-module BOOT_CONTROL(output is_powered_on);
-    // As we don't have a button to control boot.
-    // We say boot will automatically get pressed after
-    // 100 time units.
-    reg _is_powered_on;
-    initial begin
-        assign _is_powered_on = 0;
-        # 100
-        assign _is_powered_on = 1;
+`define BOOTSEQUENCE_ORG 'h44
+
+module BOOT_CONTROL(
+        output reg is_powered_on,
+        output reg [15:0] pc_next,
+        output reg [1:0] flags,
+        input reset,
+        input clk);
+
+    always @(negedge clk) begin
+        if(reset) begin
+            flags <= 2'b00;
+            pc_next <= 'h44;// BOOTSEQUENCE_ORG;
+            is_powered_on <= 1;
+        end
     end
-    assign is_powered_on = _is_powered_on;
 endmodule

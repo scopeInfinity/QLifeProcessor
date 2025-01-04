@@ -12,7 +12,9 @@ RAM_SIZE = 0x10000  # 64KB
 def binary_array_num(arr: List[int]):
     return sum([x<<(8*i) for i, x in enumerate(arr)])
 
+FLAGS_BITS = 2
 FLAGS_BIT_VW_ZERO = 0
+FLAGS_BIT_EXECUTE_FROM_RAM = 1
 
 class BinRunner:
     def __init__(self, clock: devices.Clock, ram: devices.RAM, brom: devices.ROM):
@@ -29,7 +31,7 @@ class BinRunner:
         # self.is_powered_on = False
         # self.step()
         self.is_powered_on = True
-        self.flags = [0]
+        self.flags = [0]*FLAGS_BITS
         # self.step()
 
         self.stage = 0
@@ -132,6 +134,7 @@ class BinRunner:
             return
         if sel == instruction.MBlockSelector_stage3.PC_NEXT:
             self.reg_pc_next = vw_value
+            self.flags[FLAGS_BIT_EXECUTE_FROM_RAM] = 1
             return
         if sel == instruction.MBlockSelector_stage3.PC_NEXT_IF_ZERO:
             # check previous vw_value flags
@@ -146,6 +149,7 @@ class BinRunner:
         if sel == instruction.MBlockSelector_stage3.HLT:
             self.is_powered_on = False
             return
+
         raise Exception(f"unsupported selector: {sel}")
 
     def m_alu(self, rw: int, r: int, op: instruction.ALU):
@@ -155,9 +159,6 @@ class BinRunner:
 
     def is_power_on(self):
         return self.is_powered_on
-
-    def is_boot_sequence(self):
-        return self.pc >= memory.BOOTSEQUENCE_ORG and self.pc < memory.DEFAULT_PROGRAM_ORG
 
     def print_bootsequence_completed(self):
         if hasattr(self, "_print_bootsequence_completed"):
@@ -172,13 +173,12 @@ class BinRunner:
         logging.debug("[stage0] PC: 0x%x, flags: %s", self.pc, self.flags)
 
         # Read instruction
-        if self.is_boot_sequence():
+        if self.flags[FLAGS_BIT_EXECUTE_FROM_RAM] == 0:
             brom_address = self.pc-memory.BOOTSEQUENCE_LOAD
             self.brom.address_line.update(brom_address)
             ins_binary = self.brom.value_line.get()
         else:
             self.print_bootsequence_completed()
-            self.ram.is_write.update(0)
             self.ram.address_line.update(self.pc)
             ins_binary = self.ram.value_out_line.get()
         ins_binary_array = util.to_little_32binaryarray(ins_binary)
@@ -249,6 +249,6 @@ class BinRunner:
             self.reg_vrw_source,
             self.reg_mblock_s3)
 
+        # TODO: Move it to stage2
         self.flags[FLAGS_BIT_VW_ZERO] = 1 if (self.reg_vw_value==0) else 0
-
 

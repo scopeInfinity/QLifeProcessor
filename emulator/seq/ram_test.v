@@ -1,8 +1,9 @@
-`include "emulator/module/mblock/ram.v"
+`include "emulator/seq/ram.v"
 
 module RAM_32bit_16aline_test;
     reg[15:0] address;
     reg is_write;
+    reg clk;
     reg[31:0] in;
     wire[31:0] out;
 
@@ -12,12 +13,16 @@ module RAM_32bit_16aline_test;
     RAM_32bit_16aline dut(.out(out),
            .in(in),
            .address(address),
-           .is_write(is_write));
+           .is_write(is_write),
+           .clk(clk));
 
     initial begin
         address = 16'b1100001110111100;
         is_write = 1;
         in = INPUT1;
+        clk = 1;
+        # 10
+        clk = 0;
         # 10
         $display("RAM_TEST: address=%b is_write=%b in=%b out=%b", address, is_write, in, out);
         if (out !== INPUT1) begin
@@ -30,6 +35,9 @@ module RAM_32bit_16aline_test;
         # 10
         in = INPUT2;
         # 10
+        clk = 1;
+        # 10
+        clk = 0;
         $display("RAM_TEST: address=%b is_write=%b in=%b out=%b", address, is_write, in, out);
         if (out !== INPUT1) begin
             $error("ram failed");
@@ -41,6 +49,10 @@ module RAM_32bit_16aline_test;
         # 10
         is_write = 1;
         # 10
+        clk = 1;
+        # 10
+        clk = 0;
+        # 10
         $display("RAM_TEST: address=%b is_write=%b in=%b out=%b", address, is_write, in, out);
         if (out !== INPUT2) begin
             $error("ram failed");
@@ -48,7 +60,6 @@ module RAM_32bit_16aline_test;
         end
 
         is_write = 0;
-        # 10
         address = 16'b1100001110111100;
         # 10
         $display("RAM_TEST: address=%b is_write=%b in=%b out=%b", address, is_write, in, out);

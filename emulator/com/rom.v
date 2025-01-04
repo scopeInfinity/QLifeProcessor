@@ -1,17 +1,19 @@
 module _ROM_32bit_16aline(
         output[31:0] out,
         input[15:0] address);
-    // 4 * 64KB ROM
-
     parameter filename = "/dev/null";
 
-    reg[31:0] buffer[0:65535];
+    reg[31:0] buffer[0:1024];
     initial begin
         $readmemb(filename, buffer);
         $display("ROM: %h", buffer[0]);
     end
+    assign out = buffer[address>>2];
 
-    assign out = buffer[address];
+    // assign out[7:0] = buffer[address+3];
+    // assign out[15:8] = buffer[address+2];
+    // assign out[23:16] = buffer[address+1];
+    // assign out[31:24] = buffer[address+0];
 
 endmodule
 
@@ -20,7 +22,7 @@ module ROM_BOOT(
         input[15:0] address);
     // 4 * 64KB ROM
 
-    _ROM_32bit_16aline #(.filename("emulator/module/mblock/rom_boot.bin"))
+    _ROM_32bit_16aline #(.filename("emulator/com/rom_boot.bin"))
         dut(.out(out),
         .address(address));
 endmodule
