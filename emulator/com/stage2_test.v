@@ -38,7 +38,7 @@ module stage2_test;
         mblock_s2 = 0;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b ram_address=%b", vrw_value, vw_value, alu_is_zero, ram_address);
-        if (vrw_value !== 99 || ram_address !== 20 || vw_value != 1099 || alu_is_zero != 0) begin
+        if (vrw_value !== 99 || ram_address !== 20 || vw_value !== 1099 || alu_is_zero !== 0) begin
             $error("stage2 failed");
             $fatal(1);
         end
@@ -46,7 +46,7 @@ module stage2_test;
         mblock_s2 = 1;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b ram_address=%b", vrw_value, vw_value, alu_is_zero, ram_address);
-        if (vrw_value !== 99 || ram_address !== 1000 || vw_value != 1099 || alu_is_zero != 0) begin
+        if (vrw_value !== 99 || ram_address !== 1000 || vw_value !== 1099 || alu_is_zero !== 0) begin
             $error("stage2 failed");
             $fatal(1);
         end
@@ -54,7 +54,7 @@ module stage2_test;
         mblock_s2 = 2;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b ram_address=%b", vrw_value, vw_value, alu_is_zero, ram_address);
-        if (vrw_value !== 99 || ram_address !== ((10<<8)|20) || vw_value != 1099 || alu_is_zero != 0) begin
+        if (vrw_value !== 99 || ram_address !== ((10<<8)|20) || vw_value !== 1099 || alu_is_zero !== 0) begin
             $error("stage2 failed");
             $fatal(1);
         end
@@ -62,7 +62,7 @@ module stage2_test;
         mblock_s2 = 4;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b", vrw_value, vw_value, alu_is_zero);
-        if (vrw_value !== 20 || vw_value != 1020 || alu_is_zero != 0) begin
+        if (vrw_value !== 20 || vw_value !== 1020 || alu_is_zero !== 0) begin
             $error("stage2 failed");
             $fatal(1);
         end
@@ -70,7 +70,7 @@ module stage2_test;
         mblock_s2 = 6;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b ram_address=%b", vrw_value, vw_value, alu_is_zero, ram_address);
-        if (vrw_value !== ((10<<8)|20)  || vw_value !=  (((10<<8)|20)+1000) || alu_is_zero != 0) begin
+        if (vrw_value !== ((10<<8)|20)  || vw_value !==  (((10<<8)|20)+1000) || alu_is_zero !== 0) begin
             $error("stage2 failed");
             $fatal(1);
         end
@@ -78,7 +78,7 @@ module stage2_test;
         mblock_s2 = 7;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b ram_address=%b", vrw_value, vw_value, alu_is_zero, ram_address);
-        if (vrw_value !== 84 || vw_value != 1084 || alu_is_zero != 0) begin
+        if (vrw_value !== 84 || vw_value !== 1084 || alu_is_zero !== 0) begin
             $error("stage2 failed");
             $fatal(1);
         end
@@ -88,7 +88,7 @@ module stage2_test;
         ram_value = 1000;
         # 10
         $display("STAGE2_TEST: vrw_value=%b vw_value=%b alu_is_zero=%b ram_address=%b", vrw_value, vw_value, alu_is_zero, ram_address);
-        if (vrw_value !== 1000 || ram_address !== 20 || vw_value != 0 || alu_is_zero != 1) begin
+        if (vrw_value !== 1000 || ram_address !== 20 || vw_value !== 0 || alu_is_zero !== 1) begin
             $error("stage2 failed");
             $fatal(1);
         end

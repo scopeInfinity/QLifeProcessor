@@ -12,7 +12,8 @@ module CHIPSET(
     );
 
     reg is_powered_on;
-    reg execute_from_ram;
+    reg flag_execute_from_ram;
+    reg flag_last_zero;
     reg[15:0] pc, pc_next;
 
     // Clock
@@ -79,7 +80,7 @@ module CHIPSET(
         .ram_value(ram_value),
         .brom_value(brom_value),
         .pc(pc),
-        .execute_from_ram(execute_from_ram));
+        .execute_from_ram(flag_execute_from_ram));
 
     // STAGE1
     wire[31:0] instruction_binary;
