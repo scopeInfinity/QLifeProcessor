@@ -1,9 +1,8 @@
 `include "emulator/com/stage3.v"
 
 module stage3_test;
-
-    wire[31:0] input_devices_value;
-    wire[7:0] input_devices_address;
+    wire[31:0] output_devices_value;
+    wire[7:0] output_devices_address;
     wire[15:0] ram_address;
     wire[31:0] ram_in;
     wire ram_is_write;
@@ -19,10 +18,12 @@ module stage3_test;
     reg[15:0] pc;
     reg is_powered_on;
     reg flag_last_zero;
+    reg execute_from_ram;
+    reg reset_button;
 
     STAGE3 dut(
-    .input_devices_value(input_devices_value),
-    .input_devices_address(input_devices_address),
+    .output_devices_value(output_devices_value),
+    .output_devices_address(output_devices_address),
     .ram_address(ram_address),
     .ram_in(ram_in),
     .ram_is_write(ram_is_write),
@@ -36,10 +37,14 @@ module stage3_test;
     .vrw_source(vrw_source),
     .pc(pc),
     .is_powered_on(is_powered_on),
-    .flag_last_zero(flag_last_zero));
+    .flag_last_zero(flag_last_zero),
+    .execute_from_ram(execute_from_ram),
+    .reset_button(reset_button));
 
     initial begin
+        reset_button = 0;
         is_powered_on = 1;
+        execute_from_ram = 1;
         pc = 10;
         flag_last_zero = 0;
         mblock_s3 = 0;
@@ -65,7 +70,7 @@ module stage3_test;
         vrw_source = 15;
         # 10
         $display("STAGE3_TEST: mblock_s3=%b pc_next=%b write_ram=%b write_out=%b radd=%b rin=%b", mblock_s3, pc_next, ram_is_write, output_is_write, ram_address, ram_in);
-        if (pc_next!==14 || input_devices_address!==15 || input_devices_value!==99 || ram_is_write!==0 || output_is_write!==1) begin
+        if (pc_next!==14 || output_devices_address!==15 || output_devices_value!==99 || ram_is_write!==0 || output_is_write!==1) begin
             $error("stage3 failed");
             $fatal(1);
         end
@@ -126,10 +131,19 @@ module stage3_test;
         mblock_s3 = 7;
         # 10
         $display("STAGE3_TEST: mblock_s3=%b", mblock_s3);
-        if (is_powered_on_new !== 0) begin
+        if (is_powered_on_new !== 0 || execute_from_ram_new !== 1) begin
             $error("stage3 failed");
             $fatal(1);
         end
 
+        mblock_s3 = 0;
+        reset_button = 1;
+        is_powered_on = 0;
+        # 10
+        $display("STAGE3_TEST: mblock_s3=%b pc_next=%b", mblock_s3, pc_next);
+        if (pc_next !== 'h44 || is_powered_on_new !== 1 || execute_from_ram_new !== 0) begin
+            $error("stage3 failed");
+            $fatal(1);
+        end
     end
 endmodule

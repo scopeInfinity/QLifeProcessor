@@ -1,5 +1,6 @@
 module CLOCK(
-    output[0:3] clk);
+    output[0:3] clk,
+    output[1:0] clk_stage);
 
     // stages:
     //   The architecture splits instructions execution in 4 stages.
@@ -23,6 +24,7 @@ module CLOCK(
 
     reg hw_clk;
     reg[0:3] _clk;
+    reg[1:0] _clk_stage;
     integer _count;
 
     initial begin
@@ -37,15 +39,19 @@ module CLOCK(
       _count <= _count + 1;
       if (_count == 0) begin
         assign _clk[0] = 1;
+        assign _clk_stage = 0;
       end
       if (_count == 1) begin
         assign _clk[1] = 1;
+        assign _clk_stage = 1;
       end
       if (_count == 2) begin
         assign _clk[2] = 1;
+        assign _clk_stage = 2;
       end
       if (_count == 3) begin
         assign _clk[3] = 1;
+        assign _clk_stage = 3;
         _count <= 0;
       end
     end
@@ -55,4 +61,5 @@ module CLOCK(
     end
 
     assign clk[0:3] = _clk[0:3];
+    assign clk_stage = _clk_stage;
 endmodule

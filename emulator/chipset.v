@@ -1,25 +1,31 @@
-`include "emulator/module/clock.v"
-`include "emulator/seq/register.v"
+`include "emulator/com/mux.v"
 `include "emulator/com/stage0.v"
 `include "emulator/com/stage1.v"
-
+`include "emulator/com/stage2.v"
+`include "emulator/com/stage3.v"
+`include "emulator/com/input_devices.v"
+`include "emulator/com/rom.v"
+`include "emulator/seq/clock.v"
+`include "emulator/seq/register.v"
+`include "emulator/seq/output_devices.v"
+`include "emulator/seq/ram.v"
 
 module CHIPSET(
-    input reset,
-    input[31:0] ram_value,
-    output[31:0] ram_address,
-    output ram_is_write,
-    );
-
-    reg is_powered_on;
-    reg flag_execute_from_ram;
-    reg flag_last_zero;
-    reg[15:0] pc, pc_next;
+    output is_powered_on,
+    output[15:0] pc,
+    output flag_execute_from_ram,
+    input reset_button);
+    // wire is_powered_on;
+    // wire flag_execute_from_ram;
+    wire flag_last_zero;
+    // wire[15:0] pc;
 
     // Clock
     wire[0:3] clk;
+    wire[1:0] clk_stage;
     CLOCK clock(
-        .clk(clk[0:3]));
+        .clk(clk[0:3]),
+        .clk_stage(clk_stage));
 
     // BROM
     wire[15:0] brom_address;
@@ -27,9 +33,9 @@ module CHIPSET(
     ROM_BOOT brom(.out(brom_value), .address(brom_address));
 
     // RAM
-    reg ram_is_write;
+    wire ram_is_write;
     wire[15:0] ram_address;
-    reg[31:0] ram_in;
+    wire[31:0] ram_in;
     wire[31:0] ram_value;
     RAM_32bit_16aline ram(
         .out(ram_value),
@@ -38,38 +44,44 @@ module CHIPSET(
         .is_write(ram_is_write),
         .clk(clk[3]));
 
-
     wire[15:0] ram_address_stage0;
     wire[15:0] ram_address_stage1;
+    wire[15:0] ram_address_stage2;
+    wire[15:0] ram_address_stage3;
+    MUX_2_16b ram_address_selector(
+      .value(ram_address),
+      .A0(ram_address_stage0),
+      .A1(ram_address_stage1),
+      .A2(ram_address_stage2),
+      .A3(ram_address_stage3),
+      .S(clk_stage));
+
     // TODO: Updated ram_address
     assign ram_address = ram_address_stage0;
 
     // Input Devices
     wire[7:0] input_devices_address;
-    reg[31:0] input_devices_value;
-    // TODO: add devices modules
+    wire[31:0] input_devices_value;
 
-    // Boot Sequence
-    //
-    // When the device have power supply but `is_powered_on` is off. The pc_eval
-    // forces `program_counter_next` to be 0 and `execute_from_brom` to True.
-    // If we keep the `is_powered_on` button in off stage for at-least 4 cycles
-    // then at "stage3 posedge" program_counter should get updated to 0.
-    // After that for every "stage0 posedge" till is_powered_on is off,
-    // program_counter:0 along with execute_from_brom:True will be used to pull
-    // up and execute first instruction from BROM.
-    //
-    // Assumption: No stateful IO devices are connected.
-    // TODO: Implement `execute_from_brom` update implementation.
-
-    // Operates on clk[3] down
-    BOOT_CONTROL boot_control(
-        .is_powered_on(is_powered_on),
-        .pc_next(pc_next),
-        .flags(flags),
-        .reset(reset),
-        .clk(clk[3]),
+    InputDevices idevices(
+        .value(input_devices_value),
+        .address(input_devices_address)
+        // .device0_values(2),
+        // .device1_values(3)
         );
+
+    // Output Devices
+    wire[31:0] output_devices_value;
+    wire[7:0] output_devices_address;
+    wire output_is_write;
+
+    OutputDevices odevices(
+        // .device0_values(device0_values),
+        // .device1_values(device1_values),
+        .address(output_devices_address),
+        .value(output_devices_value),
+        .is_write(output_is_write),
+        .clk(clk[3]));
 
     // STAGE0
     wire[31:0] _instruction_binary;
@@ -84,14 +96,18 @@ module CHIPSET(
 
     // STAGE1
     wire[31:0] instruction_binary;
-    REGISTER_up_16b r_ins_bin(
-        .out(instruction_binary),
-        .in(_instruction_binary),
+    REGISTER_up_16b stage1_r0(
+        .out(instruction_binary[31:16]),
+        .in(_instruction_binary[31:16]),
+        .clk(clk[1]));
+    REGISTER_up_16b stage1_r1(
+        .out(instruction_binary[15:0]),
+        .in(_instruction_binary[15:0]),
         .clk(clk[1]));
 
     wire[3:0] mblock_alu_op = instruction_binary[3:0];
-    wire[3:0] mblock_s1 = instruction_binary[5:4];
-    wire[1:0] mblock_s2 = instruction_binary[8:6];
+    wire[1:0] mblock_s1 = instruction_binary[5:4];
+    wire[2:0] mblock_s2 = instruction_binary[8:6];
     wire[2:0] mblock_s3 = instruction_binary[11:9];
     wire[7:0] vrw_source = instruction_binary[23:16];
     wire[7:0] vr_source = instruction_binary[31:24];
@@ -108,40 +124,113 @@ module CHIPSET(
 
     // STAGE2
     wire[31:0] vr_value;
-    REGISTER_up_16b r_ins_bin(
-        .out(_vr_value),
-        .in(_instruction_binary),
+    REGISTER_up_16b stage2_r0(
+        .out(vr_value[31:16]),
+        .in(_vr_value[31:16]),
+        .clk(clk[2]));
+    REGISTER_up_16b stage2_r1(
+        .out(vr_value[15:0]),
+        .in(_vr_value[15:0]),
         .clk(clk[2]));
 
-    // TODO: Ensure MBLOCK supplies expectations.
-    // MBLOCK_MUX is expected to fetch MBLOCK based on v0_source and
-    // instruction_op breakdowns and redirect the value into v0.
-
-    // @stage2 posedge following should freeze.
-    wire[31:0] vrw_value;
-    FETCH_AND_STORE stage2(
+    wire[31:0] _vrw_value;
+    wire[31:0] _vw_value;
+    wire _alu_is_zero;
+    STAGE2 stage2(
         .vrw_value(vrw_value),
-        .is_powered_on(is_powered_on),
+        .vw_value(vw_value),
+        .ram_address(ram_address_stage2),
+        .alu_is_zero(alu_is_zero),
+        .mblock_s2(mblock_s2),
         .vr_source(vr_source),
         .vr_value(vr_value),
-        .vrw_source(vr_source),
-        .mblock_s2(mblock_s2),
-        .clk(clk2));
-
-    wire[31:0] vw_value;
-    ALU alu(
-        .out(vw_value),
-        .is_zero(flags[FLAGS_BIT_VW_ZERO]),
-        .vr_value(vr_value),
-        .vrw_value(vrw_value),
-        .op(mblock_alu_op));
-
-    // @stage3 posedge following should freeze.
-    FETCH_AND_STORE stage2(
-        .vw_value(vw_value),
-        .vrw_value(vrw_value),
         .vrw_source(vrw_source),
+        .alu_op(mblock_alu_op),
+        .pc(pc),
+        .ram_value(ram_value));
+
+    // STAGE3
+    wire[31:0] vrw_value;
+    wire[31:0] vw_value;
+    wire alu_is_zero;
+    REGISTER_up_16b stage3_r0a(
+        .out(vrw_value[31:16]),
+        .in(_vrw_value[31:16]),
+        .clk(clk[3]));
+    REGISTER_up_16b stage3_r0b(
+        .out(vrw_value[15:0]),
+        .in(_vrw_value[15:0]),
+        .clk(clk[3]));
+    REGISTER_up_16b stage3_r1a(
+        .out(vw_value[31:16]),
+        .in(_vw_value[31:16]),
+        .clk(clk[3]));
+    REGISTER_up_16b stage3_r1b(
+        .out(vw_value[15:0]),
+        .in(_vw_value[15:0]),
+        .clk(clk[3]));
+    wire[14:0] unused0;
+    REGISTER_up_16b stage3_r2(
+        .out({unused0, alu_is_zero}),
+        .in({15'bzzzzzzzzzzzzzzz, _alu_is_zero}),
+        .clk(clk[3]));
+
+
+    wire execute_from_ram_new;
+    wire is_powered_on_new;
+    wire[15:0] pc_next;
+
+    STAGE3 stage3(
+        .output_devices_value(output_devices_value),
+        .output_devices_address(output_devices_address),
+        .ram_address(ram_address_stage3),
+        .ram_in(ram_in),
+        .ram_is_write(ram_is_write),
+        .output_is_write(output_is_write),
+        .pc_next(pc_next),
+        .execute_from_ram_new(execute_from_ram_new),
+        .is_powered_on_new(is_powered_on_new),
         .mblock_s3(mblock_s3),
-        .clk(clk3));
+        .vrw_value(vrw_value),
+        .vw_value(vw_value),
+        .vrw_source(vrw_source),
+        .pc(pc),
+        .is_powered_on(is_powered_on),
+        .flag_last_zero(flag_last_zero),
+        .execute_from_ram(flag_execute_from_ram),
+        .reset_button(reset_button));
+
+    wire[12:0] unused1;
+    REGISTER_down_16b stage3_r3(
+        .out({unused1, flag_last_zero, is_powered_on, flag_execute_from_ram}),
+        .in({13'bzzzzzzzzzzzzz, alu_is_zero, is_powered_on_new, execute_from_ram_new}),
+        .clk(clk[3]));
+
+    REGISTER_down_16b stage3_r4(
+        .out(pc),
+        .in(pc_next),
+        .clk(clk[3]));
+
+    always @(negedge clk[0]) begin
+        $display("Stage0: power=%b pc=%b ins=%b eram=%b",
+            is_powered_on_new, pc, _instruction_binary, flag_execute_from_ram);
+    end
+    always @(negedge clk[1]) begin
+        $display("Stage1: alu=%b s1=%b s2=%b s3=%b vrw_source=%b vr_source=%b",
+            mblock_alu_op, mblock_s1, mblock_s2, mblock_s3, vrw_source, vr_source);
+    end
+    always @(negedge clk[2]) begin
+        $display("Stage2: vr_value=%b",
+            vr_value);
+    end
+    always @(negedge clk[3]) begin
+        $display("Stage3: vrw_value=%b, vw_value=%b is_zero=%b",
+            vrw_value, vw_value, alu_is_zero);
+    end
+    always @(posedge clk[0]) begin
+        $display("StageE: power=%b, f_zero=%b, f_eram=%b pc=%b",
+            is_powered_on, flag_last_zero, flag_execute_from_ram, pc);
+    end
+
 
 endmodule

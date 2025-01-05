@@ -4,7 +4,7 @@ OUTPUT_DIR=output
 
 .PHONY: clean test all run_ping_pong all_programs_binary all_programs_resolved
 
-all: all_programs_binary all_programs_resolved
+all: all_programs_binary all_programs_resolved verilog_modules
 
 clean:
 	rm -rf $(BUILD_DIR)

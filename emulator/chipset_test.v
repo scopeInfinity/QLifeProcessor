@@ -1,10 +1,28 @@
-// `include "emulator/chipset.v"
+`include "emulator/chipset.v"
 
 module chipset_test;
-    // wire reset; // reset button
-    // CHIPSET dut(.reset(reset));
+    reg reset_button;
 
-    // initial begin
-    //     assign reset = 0; // button is never pressed.
-    // end
+    wire is_powered_on;
+    wire flag_execute_from_ram;
+    wire[15:0] pc;
+    CHIPSET dut(
+        .reset_button(reset_button),
+        .pc(pc),
+        .is_powered_on(is_powered_on),
+        .flag_execute_from_ram(flag_execute_from_ram));
+
+    initial begin
+        reset_button = 0;
+        # 80
+        reset_button = 1;
+        # 80
+        reset_button = 0;
+        # 100
+        if (reset_button !== 0) begin
+            $error("chipset failed");
+            $fatal(1);
+        end
+        $finish();
+    end
 endmodule

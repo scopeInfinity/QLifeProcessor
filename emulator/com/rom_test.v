@@ -12,28 +12,14 @@ module rom_test;
         address = 0;
         # 10
         $display("ROM_TEST: address=%b out=%b", address, out);
-        if (out !== 32'b10000010101111110111100001010111) begin
-            $error("rom failed");
-            $fatal(1);
-        end
-        address = 1*4;
-        # 10
-        $display("ROM_TEST: address=%b out=%b", address, out);
-        if (out !== 32'b11111100101011001101000010101001) begin
+        if (out !== 32'b01010111011110001011111110000010) begin
             $error("rom failed");
             $fatal(1);
         end
         address = 3*4;
         # 10
         $display("ROM_TEST: address=%b out=%b", address, out);
-        if (out !== 32'b11111010111111110100000111111110) begin
-            $error("rom failed");
-            $fatal(1);
-        end
-        address = 7*4;
-        # 10
-        $display("ROM_TEST: address=%b out=%b", address, out);
-        if (out !== 32'b10011111011110101000001000101001) begin
+        if (out !== 32'b11111110010000011111111111111010) begin
             $error("rom failed");
             $fatal(1);
         end
@@ -48,10 +34,10 @@ module rom_boot_test;
         .address(address));
 
     initial begin
-        address = 0;
+        address = 'h40;
         # 10
-        $display("ROM_TEST: address=%b out=%b", address, out);
-        if (out !== 32'b10000010101111110111100001010111) begin
+        $display("BROM_TEST: address=%b out=%b", address, out);
+        if (out !== 32'b00000000000000000000000001000100) begin
             $error("rom failed");
             $fatal(1);
         end

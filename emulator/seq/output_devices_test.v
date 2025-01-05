@@ -4,7 +4,7 @@ module OutputDevices_test;
     wire[31:0] device0_values;
     wire[31:0] device1_values;
 
-    reg[15:0] address;
+    reg[7:0] address;
     reg is_write;
     reg clk;
     reg[31:0] value;

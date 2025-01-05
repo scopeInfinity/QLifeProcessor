@@ -1,6 +1,6 @@
 module InputDevices(
     output[31:0] value,
-    input[15:0] address,
+    input[7:0] address,
     input[31:0] device0_values,
     input[31:0] device1_values);
 

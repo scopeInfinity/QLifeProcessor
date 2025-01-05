@@ -35,7 +35,7 @@ module stage0_test;
     localparam [31:0] INPUT1 = 32'b11100101111110000100101010110001;
 
     initial begin
-        pc = 16'b0000000000000100;
+        pc = 16'b0000000001000100;  // 0x44
         ram_is_write = 1;
         ram_in = INPUT1;
         clk = 1;
@@ -44,8 +44,8 @@ module stage0_test;
         # 10
         execute_from_ram = 0;
         # 10
-        $display("STAGE0_TEST: pc=%b out=%b", pc, instruction_binary);
-        if (instruction_binary !== 32'b11111100101011001101000010101001) begin
+        $display("STAGE0_TEST: pc=%b out=%b rom_address=%b rom_value=%b", pc, instruction_binary, rom_address, rom_value);
+        if (instruction_binary !== 32'b00000000000000000000001000110100) begin
             $error("stage0 failed");
             $fatal(1);
         end

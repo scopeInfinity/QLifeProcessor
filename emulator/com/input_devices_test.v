@@ -6,7 +6,7 @@ module InputDevices_test;
 
     reg[31:0] device0_values = INPUT1;
     reg[31:0] device1_values = INPUT2;
-    reg[15:0] address;
+    reg[7:0] address;
 
     wire[31:0] value;
 

@@ -1,3 +1,6 @@
+`ifndef INCLUDED_MUX
+`define INCLUDED_MUX
+
 module MUX_1_16b(
     output reg [15:0] value,
     input [15:0] A0, A1,
@@ -26,3 +29,4 @@ module MUX_2_16b(
         endcase
     end
 endmodule
+`endif
