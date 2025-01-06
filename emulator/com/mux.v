@@ -6,7 +6,7 @@ module MUX_1_16b(
     input [15:0] A0, A1,
     input S);
 
-    always @(*) begin
+    always @(S, A0, A1) begin
         if (S) begin
             value = A1;
         end else begin
@@ -20,7 +20,7 @@ module MUX_2_16b(
     input [15:0] A0, A1, A2, A3,
     input [1:0] S);
 
-    always @(*) begin
+    always @(S, A0, A1, A2, A3) begin
         case (S)
             2'b00: value = A0;
             2'b01: value = A1;

@@ -2,7 +2,7 @@
 
 module stage3_test;
     wire[31:0] output_devices_value;
-    wire[7:0] output_devices_address;
+    wire[7:0] io_device_id;
     wire[15:0] ram_address;
     wire[31:0] ram_in;
     wire ram_is_write;
@@ -23,7 +23,7 @@ module stage3_test;
 
     STAGE3 dut(
     .output_devices_value(output_devices_value),
-    .output_devices_address(output_devices_address),
+    .io_device_id(io_device_id),
     .ram_address(ram_address),
     .ram_in(ram_in),
     .ram_is_write(ram_is_write),
@@ -70,7 +70,7 @@ module stage3_test;
         vrw_source = 15;
         # 10
         $display("STAGE3_TEST: mblock_s3=%b pc_next=%b write_ram=%b write_out=%b radd=%b rin=%b", mblock_s3, pc_next, ram_is_write, output_is_write, ram_address, ram_in);
-        if (pc_next!==14 || output_devices_address!==15 || output_devices_value!==99 || ram_is_write!==0 || output_is_write!==1) begin
+        if (pc_next!==14 || io_device_id!==15 || output_devices_value!==99 || ram_is_write!==0 || output_is_write!==1) begin
             $error("stage3 failed");
             $fatal(1);
         end

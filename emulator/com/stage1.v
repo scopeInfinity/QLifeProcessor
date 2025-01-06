@@ -2,7 +2,7 @@
 
 module STAGE1(
     output[31:0] vr_value,
-    output[7:0] input_devices_address,
+    output[7:0] io_device_id,
     output[15:0] ram_address,
     input[1:0] mblock_s1,
     input[7:0] vr_source,
@@ -11,7 +11,7 @@ module STAGE1(
 
     wire[31:0] _const_value;
 
-    assign input_devices_address = vr_source;
+    assign io_device_id = vr_source;
     assign _const_value[7:0] = vr_source;
     assign _const_value[31:8] = 24'b000000000000000000000000;
     assign ram_address[7:0] = vr_source;

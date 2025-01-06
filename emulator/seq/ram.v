@@ -10,7 +10,8 @@ module RAM_32bit_16aline(
     always @(negedge clk) begin
         // Write are triggered at negedge
         if (is_write) begin
-        mem[address] <= in;
+            mem[address] <= in;
+            $display("RAM[%x] <= %x", address, in);
         end
     end
     assign out = mem[address];

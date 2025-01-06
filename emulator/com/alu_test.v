@@ -27,8 +27,8 @@ module alu_test;
 
         // SUB
         op = 4'b0001;
-        in_r = 2536;
-        in_rw = 113;
+        in_r = 113;
+        in_rw = 2536;
         # 10
         $display("ALU_TEST: op=%b in_r=%b in_rw=%b", op, in_r, in_rw);
         if (out !== 2423 || is_zero !== 0) begin
@@ -38,8 +38,8 @@ module alu_test;
 
         // LSR
         op = 4'b0010;
-        in_r = 2536;
-        in_rw = 2;
+        in_r = 2;
+        in_rw = 2536;
         # 10
         $display("ALU_TEST: op=%b in_r=%b in_rw=%b", op, in_r, in_rw);
         if (out !== 10144 || is_zero !== 0) begin
@@ -49,8 +49,8 @@ module alu_test;
 
         // RSR
         op = 4'b0011;
-        in_r = 2536;
-        in_rw = 4;
+        in_r = 4;
+        in_rw = 2536;
         # 10
         $display("ALU_TEST: op=%b in_r=%b in_rw=%b", op, in_r, in_rw);
         if (out !== 158 || is_zero !== 0) begin

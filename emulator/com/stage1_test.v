@@ -2,7 +2,7 @@
 
 module stage1_test;
     wire[31:0] vr_value;
-    wire[7:0] input_devices_address;
+    wire[7:0] io_device_id;
     wire[15:0] ram_address;
 
     reg[1:0] mblock_s1;
@@ -12,7 +12,7 @@ module stage1_test;
 
     STAGE1 dut(
         .vr_value(vr_value),
-        .input_devices_address(input_devices_address),
+        .io_device_id(io_device_id),
         .ram_address(ram_address),
         .mblock_s1(mblock_s1),
         .vr_source(vr_source),
@@ -34,8 +34,8 @@ module stage1_test;
         # 10
         mblock_s1 = 2;
         # 10
-        $display("STAGE1_TEST: vr_value=%b input_devices_address=%b", vr_value, input_devices_address);
-        if (vr_value !== 22 || input_devices_address !== 33) begin
+        $display("STAGE1_TEST: vr_value=%b io_device_id=%b", vr_value, io_device_id);
+        if (vr_value !== 22 || io_device_id !== 33) begin
             $error("stage1 failed");
             $fatal(1);
         end

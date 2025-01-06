@@ -6,7 +6,7 @@
 
 module STAGE3(
     output[31:0] output_devices_value,
-    output[7:0] output_devices_address,
+    output[7:0] io_device_id,
     output[15:0] ram_address,
     output[31:0] ram_in,
     output ram_is_write,
@@ -28,7 +28,7 @@ module STAGE3(
     DECODER_3 dut(.out(mblock_s3d), .in(mblock_s3));
 
     assign output_devices_value = vw_value;
-    assign output_devices_address = vrw_source;
+    assign io_device_id = vrw_source;
 
     assign ram_in = vw_value;
     MUX_1_16b m1(
@@ -59,5 +59,5 @@ module STAGE3(
       .S(reset_button));
 
     assign is_powered_on_new = (is_powered_on & (!mblock_s3d[7])) | reset_button;
-    assign execute_from_ram_new = execute_from_ram & (!reset_button);
+    assign execute_from_ram_new = (execute_from_ram | mblock_s3d[4]) & (!reset_button);
 endmodule

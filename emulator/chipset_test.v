@@ -18,7 +18,7 @@ module chipset_test;
         reset_button = 1;
         # 80
         reset_button = 0;
-        # 100
+        # 200000
         if (reset_button !== 0) begin
             $error("chipset failed");
             $fatal(1);

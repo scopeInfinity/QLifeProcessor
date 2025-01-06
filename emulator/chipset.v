@@ -3,11 +3,10 @@
 `include "emulator/com/stage1.v"
 `include "emulator/com/stage2.v"
 `include "emulator/com/stage3.v"
-`include "emulator/com/input_devices.v"
 `include "emulator/com/rom.v"
 `include "emulator/seq/clock.v"
 `include "emulator/seq/register.v"
-`include "emulator/seq/output_devices.v"
+`include "emulator/seq/io_devices.v"
 `include "emulator/seq/ram.v"
 
 module CHIPSET(
@@ -30,7 +29,8 @@ module CHIPSET(
     // BROM
     wire[15:0] brom_address;
     wire[31:0] brom_value;
-    ROM_BOOT brom(.out(brom_value), .address(brom_address));
+    ROM_BOOT #(.filename("output/programs/boot_sequence.bin"))
+        brom(.out(brom_value), .address(brom_address));
 
     // RAM
     wire ram_is_write;
@@ -55,33 +55,32 @@ module CHIPSET(
       .A2(ram_address_stage2),
       .A3(ram_address_stage3),
       .S(clk_stage));
+    // always @(ram_address, ram_address_stage0, ram_address_stage1, ram_address_stage2, ram_address_stage3, clk_stage)
+    // begin
+    // $display("add:%b, s0:%b, s1:%b, s2:%b, s3:%b, stage:%b", ram_address, ram_address_stage0, ram_address_stage1, ram_address_stage2, ram_address_stage3, clk_stage);
+    // end
 
-    // TODO: Updated ram_address
-    assign ram_address = ram_address_stage0;
-
-    // Input Devices
-    wire[7:0] input_devices_address;
+    // IO Devices
+    wire[7:0] io_device_id_s1;
+    wire[7:0] io_device_id_s3;
+    wire[7:0] io_device_id;
     wire[31:0] input_devices_value;
-
-    InputDevices idevices(
-        .value(input_devices_value),
-        .address(input_devices_address)
-        // .device0_values(2),
-        // .device1_values(3)
-        );
-
-    // Output Devices
     wire[31:0] output_devices_value;
-    wire[7:0] output_devices_address;
     wire output_is_write;
 
-    OutputDevices odevices(
-        // .device0_values(device0_values),
-        // .device1_values(device1_values),
-        .address(output_devices_address),
-        .value(output_devices_value),
+    IODevices io_devices(
+        .value_out(input_devices_value),
+        .device_id(io_device_id),
+        .value_in(output_devices_value),
         .is_write(output_is_write),
         .clk(clk[3]));
+
+    wire[7:0] unused2;
+    MUX_1_16b io_device_id_selector(
+      .value({unused2, io_device_id}),
+      .A0({unused2, io_device_id_s1}),
+      .A1({unused2, io_device_id_s3}),
+      .S(clk_stage[1]));
 
     // STAGE0
     wire[31:0] _instruction_binary;
@@ -115,8 +114,8 @@ module CHIPSET(
     wire[31:0] _vr_value;
     STAGE1 stage1(
         .vr_value(_vr_value),
-        .input_devices_address(input_devices_address),
-        .ram_address(ram_address),
+        .io_device_id(io_device_id_s1),
+        .ram_address(ram_address_stage1),
         .mblock_s1(mblock_s1),
         .vr_source(vr_source),
         .input_devices_value(input_devices_value),
@@ -137,10 +136,10 @@ module CHIPSET(
     wire[31:0] _vw_value;
     wire _alu_is_zero;
     STAGE2 stage2(
-        .vrw_value(vrw_value),
-        .vw_value(vw_value),
+        .vrw_value(_vrw_value),
+        .vw_value(_vw_value),
         .ram_address(ram_address_stage2),
-        .alu_is_zero(alu_is_zero),
+        .alu_is_zero(_alu_is_zero),
         .mblock_s2(mblock_s2),
         .vr_source(vr_source),
         .vr_value(vr_value),
@@ -182,7 +181,7 @@ module CHIPSET(
 
     STAGE3 stage3(
         .output_devices_value(output_devices_value),
-        .output_devices_address(output_devices_address),
+        .io_device_id(io_device_id_s3),
         .ram_address(ram_address_stage3),
         .ram_in(ram_in),
         .ram_is_write(ram_is_write),
@@ -211,26 +210,24 @@ module CHIPSET(
         .in(pc_next),
         .clk(clk[3]));
 
-    always @(negedge clk[0]) begin
-        $display("Stage0: power=%b pc=%b ins=%b eram=%b",
-            is_powered_on_new, pc, _instruction_binary, flag_execute_from_ram);
-    end
-    always @(negedge clk[1]) begin
-        $display("Stage1: alu=%b s1=%b s2=%b s3=%b vrw_source=%b vr_source=%b",
-            mblock_alu_op, mblock_s1, mblock_s2, mblock_s3, vrw_source, vr_source);
-    end
-    always @(negedge clk[2]) begin
-        $display("Stage2: vr_value=%b",
-            vr_value);
-    end
-    always @(negedge clk[3]) begin
-        $display("Stage3: vrw_value=%b, vw_value=%b is_zero=%b",
-            vrw_value, vw_value, alu_is_zero);
-    end
-    always @(posedge clk[0]) begin
-        $display("StageE: power=%b, f_zero=%b, f_eram=%b pc=%b",
-            is_powered_on, flag_last_zero, flag_execute_from_ram, pc);
-    end
-
-
+    // always @(negedge clk[0]) begin
+    //     $display("Stage0: power=%b pc=%x ins=%b eram=%b",
+    //         is_powered_on_new, pc, _instruction_binary, flag_execute_from_ram);
+    // end
+    // always @(negedge clk[1]) begin
+    //     $display("Stage1: alu=%b s1=%b s2=%b s3=%b vrw_source=%x vr_source=%x",
+    //         mblock_alu_op, mblock_s1, mblock_s2, mblock_s3, vrw_source, vr_source);
+    // end
+    // always @(negedge clk[2]) begin
+    //     $display("Stage2: vr_value=%x",
+    //         vr_value);
+    // end
+    // always @(negedge clk[3]) begin
+    //     $display("Stage3: vrw_value=%x, vw_value=%x is_zero=%b",
+    //         vrw_value, vw_value, alu_is_zero);
+    // end
+    // always @(posedge clk[0]) begin
+    //     $display("StageE: power=%b, f_zero=%b, f_eram=%b pc=%x write_ram=%b wrire_io=%b",
+    //         is_powered_on, flag_last_zero, flag_execute_from_ram, pc, ram_is_write, output_is_write);
+    // end
 endmodule

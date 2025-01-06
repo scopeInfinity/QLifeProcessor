@@ -17,6 +17,7 @@ MSI = 0x28  # multi-step instruction state
 # free
 
 # boot sequence
+# TODO: We can overlap PROGRAM_ORG and BOOTSEQUENCE_LOAD now
 BOOTSEQUENCE_LOAD = 0x40
 BOOTSEQUENCE_ORG  = 0x44  # as we have 4-byte rom size header at top
 

@@ -13,9 +13,9 @@ module ALU (
     always @(op, in_r, in_rw) begin
         case(op)
         4'b0000: mem = in_r+in_rw;
-        4'b0001: mem = in_r-in_rw;
-        4'b0010: mem = (in_r<<in_rw);
-        4'b0011: mem = (in_r>>in_rw);
+        4'b0001: mem = in_rw-in_r;
+        4'b0010: mem = (in_rw<<in_r);
+        4'b0011: mem = (in_rw>>in_r);
         4'b0100: mem = (in_r);
         4'b0101: mem = (in_rw);
         4'b0110: mem = (in_r&in_rw);

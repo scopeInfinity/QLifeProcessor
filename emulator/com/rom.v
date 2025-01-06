@@ -1,3 +1,6 @@
+`ifndef INCLUDED_ROM
+`define INCLUDED_ROM
+
 module _ROM_32bit_16aline(
         output[31:0] out,
         input[15:0] address);
@@ -19,12 +22,23 @@ endmodule
 module ROM_BOOT(
         output[31:0] out,
         input[15:0] address);
-    // 4 * 64KB ROM
+    parameter filename = "emulator/com/rom_boot.bin";
     reg[15:0] eaddress;
     always @(address) begin
         eaddress = address - 'h40;
     end
-    _ROM_32bit_16aline #(.filename("emulator/com/rom_boot.bin"))
-        dut(.out(out),
+    _ROM_32bit_16aline #(.filename(filename))
+        _rom(.out(out),
         .address(eaddress));
 endmodule
+
+module ROM_PINGPONG(
+        output[31:0] out,
+        input[15:0] address);
+    parameter filename = "output/programs/ping_pong.bin";
+    _ROM_32bit_16aline #(.filename(filename))
+        _rom(.out(out),
+        .address(address));
+endmodule
+
+`endif
