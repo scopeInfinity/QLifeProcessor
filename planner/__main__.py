@@ -5,7 +5,7 @@ import logging
 from planner.asm import program_parser
 from planner.sim import bin_parser
 from planner.sim import devices
-from planner.sim.programs import ping_pong
+from planner.sim.programs import ping_pong, verilog_input
 
 
 def args_parser():
@@ -26,6 +26,8 @@ def args_parser():
 
     bin_parser = subparsers.add_parser("compile_and_execute")
     bin_parser.add_argument("program")
+
+    subparsers.add_parser("verilog_io")
     return parser
 
 def main():
@@ -45,6 +47,8 @@ def main():
             _bin.set_output_device(6, devices.IntegerOutput("Screen6", bits=16))
             while True:
                 _bin.step()
+    if args.source == "verilog_io":
+        verilog_input.start()
     if args.source == "compile_and_execute":
         if args.program == "ping_pong":
             ping_pong.start()

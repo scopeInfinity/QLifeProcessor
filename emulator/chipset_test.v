@@ -23,6 +23,6 @@ module chipset_test;
             $error("chipset failed");
             $fatal(1);
         end
-        $finish();
+        // $finish();
     end
 endmodule
