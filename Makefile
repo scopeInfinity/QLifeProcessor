@@ -2,7 +2,7 @@ SRC_DIR=.
 BUILD_DIR=build
 OUTPUT_DIR=output
 
-.PHONY: clean test all run_ping_pong all_programs_binary all_programs_resolved
+.PHONY: clean test all run_verilog_io run_ping_pong all_programs_binary all_programs_resolved output_rom_binaries
 
 all: all_programs_binary all_programs_resolved verilog_modules
 
@@ -19,6 +19,8 @@ test: pytest test_verilog_modules
 
 all_programs_binary: $(patsubst programs/%.asm, $(OUTPUT_DIR)/programs/%.bin, $(shell find programs/ -name '*.asm'))
 
+output_rom_binaries: $(OUTPUT_DIR)/programs/boot_sequence.bin $(OUTPUT_DIR)/programs/ping_pong.bin
+
 $(OUTPUT_DIR)/programs/%.bin: programs/%.asm
 	mkdir -p $(dir $@)
 	python3 -m planner asm -b $^ > $@
@@ -31,3 +33,6 @@ $(OUTPUT_DIR)/programs/%_resolved.asm: programs/%.asm
 
 run_ping_pong:
 	python3 -m planner compile_and_execute ping_pong
+
+run_verilog_io:
+	python3 -m planner verilog_io

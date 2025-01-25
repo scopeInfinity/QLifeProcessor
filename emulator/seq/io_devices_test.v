@@ -20,25 +20,38 @@ module IODevices_test;
 
     initial begin
         device_id = 1;
-        is_write = 1;
+        is_write = 0;
         value_in = INPUT1;
         clk = 1;
         # 10
         clk = 0;
         # 10
-        device_id = 0;
-        $display("IO_DEVICES_TEST: device_id=%b value_out=%b", device_id, value_out);
-        if (value_out === INPUT1) begin
-            $error("io failed");
-            $fatal(1);
-        end
-        # 10
-        device_id = 1;
-        # 10
+        device_id = 3;  // const
+        # 5
         $display("IO_DEVICES_TEST: device_id=%b value_out=%b", device_id, value_out);
         if (value_out !== INPUT1) begin
             $error("io failed");
             $fatal(1);
         end
+        # 10
+        device_id = 2;  // PROM
+        value_in = 0;
+        # 10
+        $display("IO_DEVICES_TEST: device_id=%b value_out=%b", device_id, value_out);
+        if (value_out === INPUT1) begin
+            // not a great test but ok.
+            $error("io failed");
+            $fatal(1);
+        end
+        # 10
+        device_id = 5;  // IPC
+        value_in = 10;
+        is_write = 1;
+        # 10
+        clk = 0;
+        # 10
+        clk = 1;
+        // trigger write
+        // no verification, but it should generate logs.
     end
 endmodule
