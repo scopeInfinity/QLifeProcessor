@@ -4,6 +4,7 @@ from threading import Thread
 import time
 import random
 import logging
+import atexit
 
 class Device:
     def __init__(self, bits = 8):
@@ -247,7 +248,7 @@ class LEDDisplay(Device):
         if self.use_print:
             print(new_display)
 
-RAM_SIZE = 0x10000  # 64KB
+RAM_SIZE = 0x400  # 4KB
 
 class RAM(object):
     def __init__(self):
@@ -262,10 +263,19 @@ class RAM(object):
         self.is_write = IntegerOutput("ram_is_write", bits=1)
         self.value_in_line = IntegerOutput("ram_value_in", bits=self.value_bits)
         self.value_out_line = LatchInput("ram_value_out", bits=self.value_bits)
+        self._debug_address_used = set()
+
+        def _debug_on_exit():
+            print("RAM used: %d byte(s)" % len(self._debug_address_used))
+        atexit.register(_debug_on_exit)
 
         def _on_address_change(_, __):
             address = self.address_line.get()
             value=util.from_littlearray_32binary(self.read_ram(address, 4))
+            self._debug_address_used.add(value)
+            self._debug_address_used.add(value+1)
+            self._debug_address_used.add(value+2)
+            self._debug_address_used.add(value+3)
             self.value_out_line.update(value)
         self.address_line.add_change_handler(_on_address_change)
 

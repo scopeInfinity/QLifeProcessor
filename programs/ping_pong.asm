@@ -49,9 +49,6 @@ BALL_MINY equ 0
 
 section .text
   main:
-    movc ESP, 0xFF
-    shlc ESP, 8
-    orc ESP, 0xF0
     jmp game
 
 section .data

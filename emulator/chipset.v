@@ -1,128 +1,233 @@
-`include "emulator/module/clock.v"
+`include "emulator/com/mux.v"
+`include "emulator/com/stage0.v"
+`include "emulator/com/stage1.v"
+`include "emulator/com/stage2.v"
+`include "emulator/com/stage3.v"
+`include "emulator/com/rom.v"
+`include "emulator/seq/clock.v"
+`include "emulator/seq/register.v"
+`include "emulator/seq/io_devices.v"
+`include "emulator/seq/ram.v"
 
-module CHIPSET();
-    // Global Registers
-    reg execute_from_brom;
+module CHIPSET(
+    output is_powered_on,
+    output[15:0] pc,
+    output flag_execute_from_ram,
+    input reset_button);
+    // wire is_powered_on;
+    // wire flag_execute_from_ram;
+    wire flag_last_zero;
+    // wire[15:0] pc;
 
-    // Stages
+    // Clock
     wire[0:3] clk;
-    wire[0:3] is_stage;
+    wire[1:0] clk_stage;
     CLOCK clock(
         .clk(clk[0:3]),
-        .is_stage(is_stage[0:3]));
+        .clk_stage(clk_stage));
 
-    // Boot Sequence
-    //
-    // When the device have power supply but `is_powered_on` is off. The pc_eval
-    // forces `program_counter_next` to be 0 and `execute_from_brom` to True.
-    // If we keep the `is_powered_on` button in off stage for at-least 4 cycles
-    // then at "stage3 posedge" program_counter should get updated to 0.
-    // After that for every "stage0 posedge" till is_powered_on is off,
-    // program_counter:0 along with execute_from_brom:True will be used to pull
-    // up and execute first instruction from BROM.
-    //
-    // Assumption: No stateful IO devices are connected.
-    // TODO: Implement `execute_from_brom` update implementation.
-    wire is_powered_on;
-    BOOT_CONTROL boot_control(.is_powered_on(is_powered_on));
+    // BROM
+    wire[15:0] brom_address;
+    wire[31:0] brom_value;
+    ROM_BOOT #(.filename("output/programs/boot_sequence.bin"))
+        brom(.out(brom_value), .address(brom_address));
 
+    // RAM
+    wire ram_is_write;
+    wire[15:0] ram_address;
+    wire[31:0] ram_in;
+    wire[31:0] ram_value;
+    RAM_32bit_16aline ram(
+        .out(ram_value),
+        .in(ram_in),
+        .address(ram_address),
+        .is_write(ram_is_write),
+        .clk(clk[3]));
 
-    // MBLOCK is a continous circuit and doesn't depend on clock
-    // but the behaviour do depend on stage which is abstracted.
-    wire[15:0] program_counter;
-    wire[1:0] mblock_selector;
-    wire[15:0] mblock_address;
-    wire[31:0] mblock_input;
-    wire[31:0] mblock_output;
-    wire mblock_write;
+    wire[15:0] ram_address_stage0;
+    wire[15:0] ram_address_stage1;
+    wire[15:0] ram_address_stage2;
+    wire[15:0] ram_address_stage3;
+    MUX_2_16b ram_address_selector(
+      .value(ram_address),
+      .A0(ram_address_stage0),
+      .A1(ram_address_stage1),
+      .A2(ram_address_stage2),
+      .A3(ram_address_stage3),
+      .S(clk_stage));
+    // always @(ram_address, ram_address_stage0, ram_address_stage1, ram_address_stage2, ram_address_stage3, clk_stage)
+    // begin
+    // $display("add:%b, s0:%b, s1:%b, s2:%b, s3:%b, stage:%b", ram_address, ram_address_stage0, ram_address_stage1, ram_address_stage2, ram_address_stage3, clk_stage);
+    // end
 
-    MBLOCK_MUX mblock_mux(
-        .mblock_address(mblock_address[15:0]),
-        .mblock_selector(mblock_selector[1:0]),
-        .execute_from_brom(execute_from_brom),
-        .is_stage(is_stage[0:3]),
-        .address0(program_counter),
-        .address1(v0_source),
-        .address2(v1_source),
-        .address3(v2_source),
-        .is_write(4'b0000));
+    // IO Devices
+    wire[7:0] io_device_id_s1;
+    wire[7:0] io_device_id_s3;
+    wire[7:0] io_device_id;
+    wire[31:0] input_devices_value;
+    wire[31:0] output_devices_value;
+    wire output_is_write;
 
-    MBLOCK mblock(
-        .out(mblock_output),
-        .selector(mblock_selector),
-        .in(mblock_input),
-        .address(mblock_address),
-        .is_write(mblock_write));
+    IODevices io_devices(
+        .value_out(input_devices_value),
+        .device_id(io_device_id),
+        .value_in(output_devices_value),
+        .is_write(output_is_write),
+        .clk(clk[3]));
+
+    wire[7:0] unused2;
+    MUX_1_16b io_device_id_selector(
+      .value({unused2, io_device_id}),
+      .A0({unused2, io_device_id_s1}),
+      .A1({unused2, io_device_id_s3}),
+      .S(clk_stage[1]));
 
     // STAGE0
-
-    // TODO: Ensure MBLOCK supplies expectations.
-    // MBLOCK_MUX is expected to fetch MBLOCK at `program_counter` from
-    // BROM / RAM based on `execute_from_brom` and redirect the value
-    // to full_ins via mblock_output.
-
-    // @stage0 posedge following values should freeze.
-    wire[7:0] v0_source, v1_source, v2_source, instruction_op;
-    INS_RESOLVER stage0(
-        .v0(v0_source), .v1(v1_source), .v2(v2_source), .op(instruction_op),
-        .full_ins(.mblock_output),
-        clk[0]);
+    wire[31:0] _instruction_binary;
+    STAGE0 stage0(
+        .instruction_binary(_instruction_binary),
+        .ram_address(ram_address_stage0),
+        .brom_address(brom_address),
+        .ram_value(ram_value),
+        .brom_value(brom_value),
+        .pc(pc),
+        .execute_from_ram(flag_execute_from_ram));
 
     // STAGE1
-
-    // TODO: Breakdown instruction_op into sub-operations
-
-    // TODO: Ensure MBLOCK supplies expectations.
-    // MBLOCK_MUX is expected to fetch MBLOCK based on v0_source and
-    // instruction_op breakdowns and redirect the value into v0.
-
-    // @stage1 posedge following should freeze.
-    wire[31:0] v0;
-    FETCH_AND_STORE stage1(
-        .value(v0),
-        .in(mblock_output),
+    wire[31:0] instruction_binary;
+    REGISTER_up_16b stage1_r0(
+        .out(instruction_binary[31:16]),
+        .in(_instruction_binary[31:16]),
+        .clk(clk[1]));
+    REGISTER_up_16b stage1_r1(
+        .out(instruction_binary[15:0]),
+        .in(_instruction_binary[15:0]),
         .clk(clk[1]));
 
+    wire[3:0] mblock_alu_op = instruction_binary[3:0];
+    wire[1:0] mblock_s1 = instruction_binary[5:4];
+    wire[2:0] mblock_s2 = instruction_binary[8:6];
+    wire[2:0] mblock_s3 = instruction_binary[11:9];
+    wire[7:0] vrw_source = instruction_binary[23:16];
+    wire[7:0] vr_source = instruction_binary[31:24];
+
+    wire[31:0] _vr_value;
+    STAGE1 stage1(
+        .vr_value(_vr_value),
+        .io_device_id(io_device_id_s1),
+        .ram_address(ram_address_stage1),
+        .mblock_s1(mblock_s1),
+        .vr_source(vr_source),
+        .input_devices_value(input_devices_value),
+        .ram_value(ram_value));
+
     // STAGE2
+    wire[31:0] vr_value;
+    REGISTER_up_16b stage2_r0(
+        .out(vr_value[31:16]),
+        .in(_vr_value[31:16]),
+        .clk(clk[2]));
+    REGISTER_up_16b stage2_r1(
+        .out(vr_value[15:0]),
+        .in(_vr_value[15:0]),
+        .clk(clk[2]));
 
-    // TODO: Ensure MBLOCK supplies expectations.
-    // MBLOCK_MUX is expected to fetch MBLOCK based on v0_source and
-    // instruction_op breakdowns and redirect the value into v0.
-
-    // @stage2 posedge following should freeze.
-    wire[31:0] v1;
-    FETCH_AND_STORE stage2(
-        .value(v1),
-        .in(mblock_output),
-        .clk(clk2));
+    wire[31:0] _vrw_value;
+    wire[31:0] _vw_value;
+    wire _alu_is_zero;
+    STAGE2 stage2(
+        .vrw_value(_vrw_value),
+        .vw_value(_vw_value),
+        .ram_address(ram_address_stage2),
+        .alu_is_zero(_alu_is_zero),
+        .mblock_s2(mblock_s2),
+        .vr_source(vr_source),
+        .vr_value(vr_value),
+        .vrw_source(vrw_source),
+        .alu_op(mblock_alu_op),
+        .pc(pc),
+        .ram_value(ram_value));
 
     // STAGE3
-    // TODO: alu_op should be computed using instruction_op breakdowns.
-    wire[3:0] alu_op;
-    wire[31:0] v2;
+    wire[31:0] vrw_value;
+    wire[31:0] vw_value;
+    wire alu_is_zero;
+    REGISTER_up_16b stage3_r0a(
+        .out(vrw_value[31:16]),
+        .in(_vrw_value[31:16]),
+        .clk(clk[3]));
+    REGISTER_up_16b stage3_r0b(
+        .out(vrw_value[15:0]),
+        .in(_vrw_value[15:0]),
+        .clk(clk[3]));
+    REGISTER_up_16b stage3_r1a(
+        .out(vw_value[31:16]),
+        .in(_vw_value[31:16]),
+        .clk(clk[3]));
+    REGISTER_up_16b stage3_r1b(
+        .out(vw_value[15:0]),
+        .in(_vw_value[15:0]),
+        .clk(clk[3]));
+    wire[14:0] unused0;
+    REGISTER_up_16b stage3_r2(
+        .out({unused0, alu_is_zero}),
+        .in({15'bzzzzzzzzzzzzzzz, _alu_is_zero}),
+        .clk(clk[3]));
 
-    wire flag_alu_zero;
-    ALU alu(
-        .out(v2),
-        .is_zero(flag_alu_zero),
-        .op(alu_op),
-        .in0(v0),
-        .in1(v1));
 
-    // MBLOCK input only comes from ALU output.
-    assign mblock_input = v2;
+    wire execute_from_ram_new;
+    wire is_powered_on_new;
+    wire[15:0] pc_next;
 
-    // TODO: jump instruction
-    PC_NEXT pc_next(
-        .program_counter_next(program_counter_next),
-        .program_counter(program_counter),
-        .is_powered_on(is_powered_on));
+    STAGE3 stage3(
+        .output_devices_value(output_devices_value),
+        .io_device_id(io_device_id_s3),
+        .ram_address(ram_address_stage3),
+        .ram_in(ram_in),
+        .ram_is_write(ram_is_write),
+        .output_is_write(output_is_write),
+        .pc_next(pc_next),
+        .execute_from_ram_new(execute_from_ram_new),
+        .is_powered_on_new(is_powered_on_new),
+        .mblock_s3(mblock_s3),
+        .vrw_value(vrw_value),
+        .vw_value(vw_value),
+        .vrw_source(vrw_source),
+        .pc(pc),
+        .is_powered_on(is_powered_on),
+        .flag_last_zero(flag_last_zero),
+        .execute_from_ram(flag_execute_from_ram),
+        .reset_button(reset_button));
 
-    // @stage3 posedge following should freeze.
-    wire[15:0] program_counter_next;
-    flipflop16 pc(
-        .out(program_counter),
-        .in(program_counter_next),
-        .clk(clk3));
+    wire[12:0] unused1;
+    REGISTER_down_16b stage3_r3(
+        .out({unused1, flag_last_zero, is_powered_on, flag_execute_from_ram}),
+        .in({13'bzzzzzzzzzzzzz, alu_is_zero, is_powered_on_new, execute_from_ram_new}),
+        .clk(clk[3]));
 
+    REGISTER_down_16b stage3_r4(
+        .out(pc),
+        .in(pc_next),
+        .clk(clk[3]));
+
+    // always @(negedge clk[0]) begin
+    //     $display("Stage0: power=%b pc=%x ins=%b eram=%b",
+    //         is_powered_on_new, pc, _instruction_binary, flag_execute_from_ram);
+    // end
+    // always @(negedge clk[1]) begin
+    //     $display("Stage1: alu=%b s1=%b s2=%b s3=%b vrw_source=%x vr_source=%x",
+    //         mblock_alu_op, mblock_s1, mblock_s2, mblock_s3, vrw_source, vr_source);
+    // end
+    // always @(negedge clk[2]) begin
+    //     $display("Stage2: vr_value=%x",
+    //         vr_value);
+    // end
+    // always @(negedge clk[3]) begin
+    //     $display("Stage3: vrw_value=%x, vw_value=%x is_zero=%b",
+    //         vrw_value, vw_value, alu_is_zero);
+    // end
+    // always @(posedge clk[0]) begin
+    //     $display("StageE: power=%b, f_zero=%b, f_eram=%b pc=%x write_ram=%b wrire_io=%b",
+    //         is_powered_on, flag_last_zero, flag_execute_from_ram, pc, ram_is_write, output_is_write);
+    // end
 endmodule

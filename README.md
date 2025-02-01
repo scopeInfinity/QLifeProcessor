@@ -8,12 +8,13 @@ The eventual goal(?) is to build a general-purpose processor integrated with sim
 ## Sample Programs
 
 * Ping Pong
+  * 16x8 LED display with W/S/Up/Down keyboard controller
   * Source: [ping_pong.asm](programs/ping_pong.asm)
   * Generate resolved assembly: `python3 -m planner asm -r programs/ping_pong.asm` [[example](output/programs/ping_pong_resolved.asm)]
   * Generate binary: `python3 -m planner asm -b programs/ping_pong.asm` [[example](output/programs/ping_pong.bin)]
-  * Run on emulator: `python3 -m planner compile_and_execute ping_pong`
-    * 16x8 LED display with W/S/Up/Down keyboard controller
+  * Run on python emulator: `python3 -m planner compile_and_execute ping_pong`
     * ![image](https://github.com/user-attachments/assets/9fa2f68f-73ae-465c-a29c-cc92b0dc421a)
+  * Run on verilog emulator: `make verilog_simulate`
 
 ## Design
 
