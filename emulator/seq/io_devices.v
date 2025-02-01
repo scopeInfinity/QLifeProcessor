@@ -31,7 +31,7 @@ module IODevices(
     ROM_PINGPONG prom(.out(prom_value), .address(value_in[15:0]));
 
     reg[31:0] _value;
-    always @(device_id) begin
+    always @(clk) begin
         case (device_id)
             // TODO: Is it ok to use continous circuit with value_in as address?
             `PROM_ID: _value <= prom_value;

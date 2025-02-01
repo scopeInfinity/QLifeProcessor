@@ -27,6 +27,10 @@ module IODevices_test;
         clk = 0;
         # 10
         device_id = 3;  // const
+        # 1
+        clk = 1;
+        # 1
+        clk = 0;
         # 5
         $display("IO_DEVICES_TEST: device_id=%b value_out=%b", device_id, value_out);
         if (value_out !== INPUT1) begin
@@ -36,6 +40,10 @@ module IODevices_test;
         # 10
         device_id = 2;  // PROM
         value_in = 0;
+        # 1
+        clk = 1;
+        # 1
+        clk = 0;
         # 10
         $display("IO_DEVICES_TEST: device_id=%b value_out=%b", device_id, value_out);
         if (value_out === INPUT1) begin

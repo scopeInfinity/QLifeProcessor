@@ -3,9 +3,9 @@ SRC_EMULATOR = $(SRC_DIR)/emulator
 
 .PHONY: verilog_modules test_verilog_modules verilog_data_prerequisites verilog_simulate
 
-$(BUILD_EMULATOR)/%_test: $(SRC_EMULATOR)/%_test.v
+$(BUILD_EMULATOR)/%_test: $(SRC_EMULATOR)/%_test.v $(SRC_EMULATOR)/%.v
 	mkdir -p $(dir $@)
-	iverilog -o $@ $^
+	iverilog -o $@ $<
 
 verilog_modules: $(BUILD_EMULATOR)/executable_chipset $(patsubst $(SRC_EMULATOR)/%_test.v, $(BUILD_EMULATOR)/%_test, $(shell find $(SRC_EMULATOR) -name '*_test.v'))
 	mkdir -p $(BUILD_EMULATOR)/io
