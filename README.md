@@ -1,7 +1,7 @@
 [![CI](https://github.com/scopeInfinity/OurPC/actions/workflows/ci.yml/badge.svg)](https://github.com/scopeInfinity/OurPC/actions/workflows/ci.yml)
 
 # QLife Processor
-The goal is to build a general-purpose processor integrated with simple input (e.g. buttons) and output devices (8x8 LED display).
+A 16-bit address, 32-bit data line general-purpose processor architecture. Key features include external ROM program execution and real-time I/O capabilities.
 
 ## Sample Programs
 
